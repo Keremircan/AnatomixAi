@@ -109,8 +109,44 @@ dialog::backdrop {
   animation: rise 0.25s ease-out both;
 }
 
+/* Giriş ekranı: silüet üzerinde aşağı inen tarama çizgisi ve nabız noktaları */
+@keyframes scan {
+  0% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+}
+@utility animate-scan {
+  animation: scan 4.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@utility animate-pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse-ring 2.2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-rise {
+  .animate-rise,
+  .animate-scan,
+  .animate-pulse-ring {
     animation: none;
   }
 }
