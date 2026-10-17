@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Three.js'ten kopyalanan Draco çözücüsü
+    "public/draco/**",
   ]),
 ]);
 

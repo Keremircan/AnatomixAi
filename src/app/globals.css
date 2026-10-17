@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+ * ANATOMIX.AI tasarım belirteçleri — koyu medikal tema.
+ * Bileşenler renkleri yalnızca bu belirteçlerden alır (bg-surface, text-muted, border-line …).
+ * Açık tema eklenecekse yalnızca bu blok yeniden tanımlanır.
+ */
+:root {
+  color-scheme: dark;
+
+  --background: #060b12; /* zemin: koyu slate */
+  --surface: #0e1620; /* kart */
+  --surface-2: #141e2b; /* ikincil yüzey, input */
+  --foreground: #e2ebf3; /* ana metin */
+  --muted: #8b9caf; /* ikincil metin */
+  --line: #273647; /* kenarlık */
+
+  --accent: #22d3ee; /* tıbbi neon cyan */
+  --accent-strong: #7de8fa;
+  --accent-foreground: #03141c; /* cyan zemin üstündeki metin */
+  --teal: #2dd4bf;
+
+  --danger: #f43f3f; /* T1 acil */
+  --warning: #fb923c; /* T2 aynı gün */
+  --caution: #facc15; /* T3 poliklinik */
+  --success: #34d399; /* T4 evde izlem */
+  --pain: #f472b6; /* şikayet bölgesi vurgusu; acil kırmızısından ayrı */
+
+  --radius: 1rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-teal: var(--teal);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-caution: var(--caution);
+  --color-success: var(--success);
+  --color-pain: var(--pain);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-card: var(--radius);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Sayfa arka planı: üstten hafif cyan ışıma + solan ızgara */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 45% at 78% -5%, color-mix(in oklab, var(--accent) 13%, transparent), transparent 70%),
+    radial-gradient(40% 40% at -5% 105%, color-mix(in oklab, var(--teal) 8%, transparent), transparent 70%);
+}
+.app-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--line) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--line) 45%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000, transparent);
+}
+
+/* Cam efekti */
+@utility glass {
+  background: color-mix(in oklab, var(--surface) 74%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid color-mix(in oklab, var(--line) 90%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog::backdrop {
+  background: color-mix(in oklab, var(--background) 60%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility animate-rise {
+  animation: rise 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+}
