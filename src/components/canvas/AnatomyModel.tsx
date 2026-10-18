@@ -283,9 +283,11 @@ export function AnatomyModel({ lod }: { lod: Lod }) {
   const userOpacity = useAnatomyStore((s) => s.layerOpacity);
 
   const offsets = useMemo(() => figureOffsets(active, mode), [active, mode]);
-  const eyesClash = mode === "stacked" && active.includes("nervous");
-  // Üst üste modda tam opak deri, içindeki tüm katmanları örter.
+  // Üst üste modda tam opak deri, içindeki tüm katmanları örter (iç katmanlar çizilmez).
   const skinCovers = mode === "stacked" && active.includes("skin") && userOpacity.skin >= 0.999;
+  // Derideki göz kopyası yalnızca sinir katmanının gözleri gerçekten çiziliyorsa gizlenir; opak deri sinir
+  // katmanını örterken gizlenirse göz yuvaları boş kalır.
+  const eyesClash = mode === "stacked" && active.includes("nervous") && !skinCovers;
 
   useEffect(() => () => void (document.body.style.cursor = ""), []);
 
