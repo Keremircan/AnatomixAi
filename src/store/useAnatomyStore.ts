@@ -41,6 +41,10 @@ type AnatomyState = {
   loadedLayers: AnatomyLayer[];
   toggleLayer: (layer: AnatomyLayer) => void;
   showLayer: (layer: AnatomyLayer) => void;
+  /** Tüm sistemleri gösterir (henüz indirilmemiş dosyalar yüklenir). */
+  showAllLayers: () => void;
+  /** Tüm sistemleri gizler; seçim temizlenir. İndirilmiş dosyalar bellekte kalır. */
+  hideAllLayers: () => void;
 
   /** Kullanıcının belirlediği katman şeffaflığı (0,1–1) */
   layerOpacity: Record<AnatomyLayer, number>;
@@ -93,8 +97,9 @@ export const useAnatomyStore = create<AnatomyState>()((set, get) => ({
     set({ user: null, isAuthenticated: false, authReady: true, role: "patient" });
   },
 
-  activeLayers: ["skin", "skeletal"],
-  loadedLayers: ["skin", "skeletal"],
+  // Sahne boş açılır; kullanıcı sol panelden katman seçene kadar hiçbir model indirilmez.
+  activeLayers: [],
+  loadedLayers: [],
   toggleLayer: (layer) =>
     set((s) => {
       const on = s.activeLayers.includes(layer);
@@ -107,6 +112,9 @@ export const useAnatomyStore = create<AnatomyState>()((set, get) => ({
     }),
   showLayer: (layer) =>
     set((s) => ({ activeLayers: addUnique(s.activeLayers, layer), loadedLayers: addUnique(s.loadedLayers, layer) })),
+  showAllLayers: () => set({ activeLayers: [...LAYER_IDS], loadedLayers: [...LAYER_IDS] }),
+  // Tüm katmanlar kapanınca kamera da tam vücut başlangıç açısına döner.
+  hideAllLayers: () => set((s) => ({ activeLayers: [], selectedMesh: null, hoveredMesh: null, viewResetKey: s.viewResetKey + 1 })),
 
   layerOpacity: Object.fromEntries(LAYER_IDS.map((id) => [id, 1])) as Record<AnatomyLayer, number>,
   setLayerOpacity: (layer, opacity) => set((s) => ({ layerOpacity: { ...s.layerOpacity, [layer]: opacity } })),

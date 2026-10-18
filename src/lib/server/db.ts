@@ -26,8 +26,11 @@ function createSql() {
     // Supabase havuzlayıcısının transaction modunda hazırlanmış ifadeler desteklenmez.
     prepare: false,
     max: 5,
-    idle_timeout: 20,
-    connect_timeout: 10,
+    // Veritabanı uzak bölgede; yeni şifreli bağlantı ~2 sn sürüyor. Boşta bağlantıyı 20 sn'de kapatmak her
+    // duraksamadan sonraki isteği ~3 sn'ye çıkarıyordu. Bağlantılar 5 dk boşta kalabilir, 30 dk'da yenilenir.
+    idle_timeout: 300,
+    max_lifetime: 60 * 30,
+    connect_timeout: 15,
     onnotice: () => {},
   });
 }
@@ -36,3 +39,20 @@ export function db() {
   globalThis.__anatomixSql ??= createSql();
   return globalThis.__anatomixSql;
 }
+
+const TRANSIENT = new Set(["CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "CONNECTION_DESTROYED", "ECONNRESET", "ETIMEDOUT"]);
+
+/**
+ * Yalnızca okuma yapan (tekrarı zararsız) sorgular için: bağlantı kurulurken ağ kaynaklı geçici bir hata olursa
+ * bir kez daha dener. Uzak bölgedeki havuzlayıcıya yeni bağlantı açılırken ara sıra zaman aşımı yaşanabiliyor.
+ */
+export async function withReadRetry<T>(query: () => Promise<T>): Promise<T> {
+  try {
+    return await query();
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code && TRANSIENT.has(code)) return query();
+    throw e;
+  }
+}
+

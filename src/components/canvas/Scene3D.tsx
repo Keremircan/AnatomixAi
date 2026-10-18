@@ -4,9 +4,10 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useProgress } from "@react-three/drei";
 import { useTheme } from "next-themes";
-import { Box3, CanvasTexture, type Group, MathUtils, type Object3D, Sphere, Vector3 } from "three";
+import { Box3, CanvasTexture, type Group, MathUtils, type Object3D, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { AnatomyModel, meshName, preloadDefaultLayers } from "./AnatomyModel";
+import { ControlsGuide, EmptySceneHint } from "./SceneOverlays";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { BODY, FIGURE_SPACING, figureOffsets, LAYER_IDS, layerDef, pickLod } from "@/lib/layers";
 
@@ -22,10 +23,17 @@ const SCENE_THEME = {
   light: { sky: "#ffffff", ground: "#b8c4d2", hemi: 1.0, ambient: 0.45, key: 1.5, rim: 0.55, rimColor: "#0e7490", back: 0.5, ring: "#0e7490", ringOpacity: 0.45, shadow: 0.32 },
 } as const;
 type SceneTheme = (typeof SCENE_THEME)[keyof typeof SCENE_THEME];
-const TWEEN_MS = 700;
+/** Kamera yumuşatma katsayısı (1/sn); 60 FPS'te kare başına ~%7 yaklaşma. */
+const CAMERA_SMOOTHING = 4.5;
+/** Odak payı: yapı kadrajın ~%65'ini kaplar. */
+const FOCUS_MARGIN = 1.5;
+const MIN_FOCUS_DISTANCE = 0.3;
+/** Odaklanılacak yapının katmanı yüklenirken en fazla bu kadar beklenir. */
+const FOCUS_WAIT_MS = 30_000;
+/** Bu z değerinin gerisindeki yapılar (ör. trapez, bel omurları) arkadan görüntülenir. */
+const BACK_Z = -0.04;
 /** Sol sistem panelinin genişliği + kenar boşluğu (md ve üstü). */
 const PANEL_INSET_PX = 300;
-const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 /** Görünür sistemler, dıştan içe sıralı. */
 function useVisibleOrdered() {
@@ -34,31 +42,34 @@ function useVisibleOrdered() {
 }
 
 /**
- * Görünüm modu veya figür sayısı değişince kamerayı ve OrbitControls hedefini
- * tüm figürleri kadraja alacak konuma yumuşakça taşır.
+ * Kamera yönetimi: genel kadraj (görünüm modu, figür sayısı, sıfırlama) ve yapı odaklama.
+ *
+ * Odaklama (seçim, arama veya semptom analizi sonucu):
+ *  - Hedef yapının sınır kutusu (Box3) her karede canlı ölçülür; böylece katman yeni yüklenmiş olsa ya da
+ *    yan yana modunda figür hâlâ kayıyor olsa bile kamera boş bir noktaya değil, yapının güncel yerine gider.
+ *  - OrbitControls hedefi kutunun merkezine kilitlenir; mesafe kutunun en büyük boyutu ve kameranın
+ *    dikey/yatay görüş açısından hesaplanır.
+ *  - Konum ve hedef, kare hızından bağımsız üstel yumuşatmayla (her karede ~%7) kayar; ani sıçrama olmaz.
+ *  - Kullanıcı sahneyi sürüklemeye başlarsa devam eden kamera hareketi bırakılır.
  */
 function CameraRig() {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const size = useThree((s) => s.size);
+  const scene = useThree((s) => s.scene);
   const mode = useAnatomyStore((s) => s.viewMode);
   const resetKey = useAnatomyStore((s) => s.viewResetKey);
-  const count = useVisibleOrdered().length;
-  const scene = useThree((s) => s.scene);
   const focusKey = useAnatomyStore((s) => s.focusKey);
-  const tween = useRef<{ t0: number; fromP: Vector3; toP: Vector3; fromT: Vector3; toT: Vector3 } | null>(null);
-  /** Yakınlaşılacak yapı; katmanı henüz yükleniyorsa bulunana kadar beklenir. */
-  const pendingFocus = useRef<{ name: string; minRadius: number; frames: number } | null>(null);
+  const count = useVisibleOrdered().length;
 
-  useEffect(() => {
-    const sel = useAnatomyStore.getState().selectedMesh;
-    if (focusKey && sel) pendingFocus.current = { name: sel.name, minRadius: sel.focusRadius ?? 0.025, frames: 0 };
-  }, [focusKey]);
+  /** Sabit hedef (genel kadraj) */
+  const goal = useRef<{ pos: Vector3; target: Vector3 } | null>(null);
+  /** Takip edilen yapı; bulunana kadar (katman yükleniyorsa) beklenir, kamera yerine oturunca bırakılır. */
+  const focus = useRef<{ name: string; minSize: number; since: number } | null>(null);
 
-  // "Üst üste" modunda katman açıp kapamak kamerayı oynatmaz; yalnızca yan yana genişliği değişince kadraj güncellenir.
-  const layoutKey = mode === "stacked" ? "stacked" : `side:${Math.max(count, 1)}`;
   // Geniş ekranda sol sistem paneli tuvalin bir kısmını kapatır; görüntü merkezi açık alana kaydırılır.
   const inset = size.width >= 768 ? PANEL_INSET_PX : 0;
+  const aspect = (size.width - inset) / Math.max(size.height, 1);
 
   useEffect(() => {
     if (!("fov" in camera)) return;
@@ -67,44 +78,64 @@ function CameraRig() {
     camera.updateProjectionMatrix();
   }, [camera, size.width, size.height, inset]);
 
+  // Kullanıcı sürüklemeye başlarsa otomatik kamera hareketini bırak.
   useEffect(() => {
-    if (!controls || !("fov" in camera)) return;
+    if (!controls) return;
+    const stop = () => {
+      goal.current = null;
+      focus.current = null;
+    };
+    controls.addEventListener("start", stop);
+    return () => controls.removeEventListener("start", stop);
+  }, [controls]);
+
+  // Genel kadraj: "üst üste" modunda katman açıp kapamak kamerayı oynatmaz; yan yana genişliği değişince,
+  // mod değişince veya sıfırlamada tüm figürler kadraja alınır.
+  const layoutKey = mode === "stacked" ? "stacked" : `side:${Math.max(count, 1)}`;
+  useEffect(() => {
+    if (!("fov" in camera)) return;
     const n = mode === "sideBySide" ? Math.max(count, 1) : 1;
     const width = (n - 1) * FIGURE_SPACING + BODY.width;
     const height = BODY.topY - BODY.floorY;
-    const vfov = MathUtils.degToRad(camera.fov);
-    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * ((size.width - inset) / size.height));
-    const dist = Math.max(height / 2 / Math.tan(vfov / 2), width / 2 / Math.tan(hfov / 2)) * 1.12 + 0.25;
-    const toT = new Vector3(0, BODY.centerY, 0);
-    tween.current = {
-      t0: performance.now(),
-      fromP: camera.position.clone(),
-      toP: toT.clone().add(new Vector3(0, 0.12, dist)),
-      fromT: controls.target.clone(),
-      toT,
-    };
+    const dist = fitDistance(width, height, camera.fov, aspect) * 1.12 + 0.25;
+    const target = new Vector3(0, BODY.centerY, 0);
+    goal.current = { pos: target.clone().add(new Vector3(0, 0.12, dist)), target };
+    focus.current = null;
     // Pencere boyutu tek başına kullanıcının açısını sıfırlamasın diye bağımlılıklara alınmadı.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutKey, resetKey, controls, camera]);
+  }, [layoutKey, resetKey, camera]);
 
-  useFrame(() => {
-    const pf = pendingFocus.current;
-    if (pf && controls && "fov" in camera) {
-      const mesh = findMesh(scene, pf.name);
-      if (mesh) {
-        pendingFocus.current = null;
-        tween.current = focusTween(mesh, pf.minRadius, camera.fov, camera.position, controls.target);
-      } else if (++pf.frames > 600) pendingFocus.current = null;
+  // Yapı odaklama isteği (seçim, arama, analiz sonucu). Genel kadraj efektinden SONRA tanımlıdır: analiz yan yana
+  // modunda yeni bir katman açtığında iki efekt aynı anda çalışır ve odak isteği kadrajı geçersiz kılmalıdır.
+  useEffect(() => {
+    const sel = useAnatomyStore.getState().selectedMesh;
+    if (!focusKey || !sel) return;
+    focus.current = { name: sel.name, minSize: (sel.focusRadius ?? 0.03) * 2, since: performance.now() };
+    goal.current = null;
+  }, [focusKey]);
+
+  const box = useMemo(() => new Box3(), []);
+  useFrame((_, delta) => {
+    if (!controls || !("fov" in camera)) return;
+
+    const f = focus.current;
+    if (f) {
+      const mesh = findMesh(scene, f.name);
+      if (mesh) goal.current = focusGoal(mesh, box, f.minSize, camera.fov, aspect);
+      else if (performance.now() - f.since > FOCUS_WAIT_MS) focus.current = null; // katman yüklenemedi
     }
 
-    const tw = tween.current;
-    if (!tw || !controls) return;
-    const t = Math.min(1, (performance.now() - tw.t0) / TWEEN_MS);
-    const e = ease(t);
-    camera.position.lerpVectors(tw.fromP, tw.toP, e);
-    controls.target.lerpVectors(tw.fromT, tw.toT, e);
+    const g = goal.current;
+    if (!g) return;
+    // Kare hızından bağımsız üstel yumuşatma: 60 FPS'te her karede kalan yolun ~%7'si.
+    const k = 1 - Math.exp(-CAMERA_SMOOTHING * Math.min(delta, 0.1));
+    camera.position.lerp(g.pos, k);
+    controls.target.lerp(g.target, k);
     controls.update();
-    if (t >= 1) tween.current = null;
+    if (camera.position.distanceToSquared(g.pos) < 1e-6 && controls.target.distanceToSquared(g.target) < 1e-6) {
+      goal.current = null;
+      focus.current = null;
+    }
   });
 
   return null;
@@ -119,19 +150,28 @@ function findMesh(scene: Object3D, name: string) {
   return hit as Object3D | null;
 }
 
-/** Yapının sınır küresini kadraja alan kamera hareketi; mevcut bakış yönü korunur. */
-function focusTween(mesh: Object3D, minRadius: number, fov: number, camPos: Vector3, target: Vector3) {
-  const sphere = new Box3().setFromObject(mesh).getBoundingSphere(new Sphere());
-  const r = Math.max(sphere.radius, minRadius);
-  const dist = (r / Math.sin(MathUtils.degToRad(fov) / 2)) * 1.35;
-  const dir = camPos.clone().sub(target).normalize();
-  if (dir.lengthSq() < 0.5) dir.set(0, 0, 1);
-  // Vücudun arka yüzündeki yapıya (ör. trapez) önden bakılıyorsa kamerayı arkaya çevir; tersi için öne.
-  // Figürler yan yana modda yalnızca X ekseninde kaydığı için Z karşılaştırması iki modda da geçerlidir.
-  const BACK_Z = -0.04, FRONT_Z = 0.06;
-  if (sphere.center.z < BACK_Z && dir.z > 0) dir.set(dir.x, dir.y, -Math.abs(dir.z)).normalize();
-  else if (sphere.center.z > FRONT_Z && dir.z < 0) dir.set(dir.x, dir.y, Math.abs(dir.z)).normalize();
-  return { t0: performance.now(), fromP: camPos.clone(), toP: sphere.center.clone().addScaledVector(dir, dist), fromT: target.clone(), toT: sphere.center.clone() };
+/** w × h boyutundaki bir alanın dikey ve yatay görüş açısına sığması için gereken kamera uzaklığı. */
+function fitDistance(w: number, h: number, fovDeg: number, aspect: number) {
+  const vHalf = MathUtils.degToRad(fovDeg) / 2;
+  const hHalf = Math.atan(Math.tan(vHalf) * aspect);
+  return Math.max(h / (2 * Math.tan(vHalf)), w / (2 * Math.tan(hHalf)));
+}
+
+/**
+ * Yapıyı kadraja alan kamera hedefi. Kutu merkezi OrbitControls hedefi olur; kamera yapıya önden
+ * (vücudun arka yüzündeki yapılarda arkadan) karşıdan bakar. Mesafe = en büyük boyutun sığacağı uzaklık
+ * × güvenlik payı + yapının derinliğinin yarısı (kamera yapının içine girmesin).
+ */
+function focusGoal(mesh: Object3D, box: Box3, minSize: number, fovDeg: number, aspect: number) {
+  // Ataların (katman grubu, yan yana kayması) dünya matrisleri de güncellenmeden ölçülürse kutu eski konumda kalır.
+  mesh.updateWorldMatrix(true, false);
+  box.setFromObject(mesh);
+  const center = box.getCenter(new Vector3());
+  const dims = box.getSize(new Vector3());
+  const maxDim = Math.max(dims.x, dims.y, dims.z, minSize);
+  const distance = Math.max(fitDistance(maxDim, maxDim, fovDeg, aspect) * FOCUS_MARGIN + dims.z / 2, MIN_FOCUS_DISTANCE);
+  const posterior = center.z < BACK_Z;
+  return { target: center, pos: new Vector3(center.x, center.y, center.z + (posterior ? -distance : distance)) };
 }
 
 /** Yumuşak zemin gölgesi dokusu (ContactShadows yerine; figürlerle birlikte kayar, ek render geçişi gerektirmez). */
@@ -155,7 +195,9 @@ function FloorMarks({ theme }: { theme: SceneTheme }) {
   const mode = useAnatomyStore((s) => s.viewMode);
   const shadow = useShadowTexture(theme.shadow);
   const offsets = figureOffsets(visible, mode);
-  if (mode === "stacked" || visible.length === 0) return <FloorMark x={0} shadow={shadow} theme={theme} />;
+  // Katman yokken boş platform çizilmez.
+  if (visible.length === 0) return null;
+  if (mode === "stacked") return <FloorMark x={0} shadow={shadow} theme={theme} />;
   return (
     <>
       {visible.map((id) => (
@@ -259,12 +301,14 @@ export default function Scene3D() {
 
         <OrbitControls
           makeDefault
+          // Boş sahnede döndürülecek bir şey yok; kontroller ilk katman açılınca etkinleşir.
+          enabled={visible.length > 0}
           target={[0, BODY.centerY, 0]}
           enableDamping
           dampingFactor={0.08}
           rotateSpeed={0.7}
           zoomSpeed={0.8}
-          minDistance={0.5}
+          minDistance={0.25}
           maxDistance={mode === "sideBySide" ? 16 : 6}
           minPolarAngle={0.25}
           maxPolarAngle={Math.PI - 0.35}
@@ -290,6 +334,7 @@ export default function Scene3D() {
             );
           })}
       </div>
+      {visible.length === 0 ? <EmptySceneHint /> : <ControlsGuide />}
       <Loader />
     </>
   );

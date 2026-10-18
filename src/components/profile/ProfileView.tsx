@@ -7,7 +7,10 @@ import {
   ArrowLeft, BadgeCheck, BriefcaseMedical, Building, CalendarDays, CircleAlert, CircleCheck, Clock, IdCard, LoaderCircle, LogOut, Mail, ShieldCheck,
   Stethoscope, UserRound, type LucideIcon,
 } from "lucide-react";
-import { AuthError, DISCLAIMER_VERSION, fetchProfileDetails, KVKK_VERSION, PROFESSIONS, type ConsentKind, type ProfileDetails } from "@/lib/auth";
+import { AuthError, DISCLAIMER_VERSION, fetchProfileDetails, KVKK_VERSION, PROFESSIONS, type ConsentKind, type ProfileDetails, type UserProfile } from "@/lib/auth";
+import { getCachedProfile, setCachedProfile } from "@/lib/profileCache";
+import { useAnatomyStore } from "@/store/useAnatomyStore";
+import { AvatarEditor } from "./AvatarEditor";
 import { useSignOut } from "@/hooks/useSignOut";
 import { cn } from "@/lib/utils";
 
@@ -20,16 +23,6 @@ const CONSENTS: { kind: ConsentKind; label: string; currentVersion?: string }[] 
   { kind: "adult_declaration", label: "18 yaş beyanı" },
 ];
 
-type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; profile: ProfileDetails };
-
-function initials(p: ProfileDetails) {
-  return (p.fullName || p.email)
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toLocaleUpperCase("tr-TR"))
-    .join("");
-}
 
 /* ───────────────────────── Parçalar ───────────────────────── */
 
@@ -80,31 +73,70 @@ function Skeleton() {
 
 /* ───────────────────────── Sayfa ───────────────────────── */
 
+/**
+ * Profil sayfası — stale-while-revalidate:
+ *  1. Oturum bilgisi store'da zaten varsa (Navbar için /api/auth/me ile alınmıştı) başlık kartı anında çizilir.
+ *  2. Profil daha önce açıldıysa son bilinen ayrıntılar (onaylar, üyelik tarihi) bellekten anında gösterilir.
+ *  3. Her iki durumda da arka planda /api/user/profile ile tazelenir; yalnızca hiçbir veri yokken iskelet görünür.
+ */
 export function ProfileView() {
   const router = useRouter();
   const { signOut, leaving } = useSignOut();
-  const [state, setState] = useState<State>({ status: "loading" });
+  const user = useAnatomyStore((s) => s.user);
+  const login = useAnatomyStore((s) => s.login);
+  const [fresh, setFresh] = useState<ProfileDetails | null>(null);
+  const [refreshing, setRefreshing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Next.js gizlenen sayfaların durumunu korur; başka bir hesapla giriş yapıldığında eski profil
-  // bir an bile görünmesin diye sayfa gizlenirken veriler temizlenir.
-  useLayoutEffect(() => () => setState({ status: "loading" }), []);
+  // Next.js gizlenen sayfaların durumunu korur; sayfa gizlenirken yerel veri bırakılır.
+  // Geri dönüldüğünde (aynı kullanıcı için) bellek önbelleği anında gösterilir.
+  useLayoutEffect(
+    () => () => {
+      setFresh(null);
+      setRefreshing(true);
+      setError(null);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
     fetchProfileDetails()
       .then((profile) => {
         if (cancelled) return;
-        if (!profile) router.replace("/login?next=/profile");
-        else setState({ status: "ready", profile });
+        if (!profile) {
+          router.replace("/login?next=/profile");
+          return;
+        }
+        setCachedProfile(profile);
+        setFresh(profile);
+        setError(null);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setState({ status: "error", message: e instanceof AuthError ? e.message : "Profil bilgileri yüklenemedi." });
+        if (!cancelled) setError(e instanceof AuthError ? e.message : "Profil bilgileri yüklenemedi.");
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
       });
     return () => {
       cancelled = true;
     };
   }, [router, reloadKey]);
+
+  const details = fresh ?? getCachedProfile(user?.id);
+  const base: UserProfile | null = details ?? user;
+
+  /** Fotoğraf değişince profil, önbellek ve Navbar (store) birlikte güncellenir. */
+  function onAvatarChange(avatarUrl: string | null) {
+    const next = { avatarUrl: avatarUrl ?? undefined };
+    if (details) {
+      const updated = { ...details, ...next };
+      setFresh(updated);
+      setCachedProfile(updated);
+    }
+    if (user) login({ ...user, ...next });
+  }
 
   return (
     <main className="flex-1 p-3 sm:p-6">
@@ -114,19 +146,25 @@ export function ProfileView() {
             <ArrowLeft className="size-4" aria-hidden />
             3B çalışma alanına dön
           </Link>
-          <span className="font-mono text-[11px] tracking-wider text-muted uppercase">Profil</span>
+          <span className="flex items-center gap-2 font-mono text-[11px] tracking-wider text-muted uppercase">
+            {refreshing && base && (
+              <span className="flex items-center gap-1.5 normal-case" role="status">
+                <LoaderCircle className="size-3 animate-spin" aria-hidden />
+                güncelleniyor
+              </span>
+            )}
+            Profil
+          </span>
         </div>
 
-        {state.status === "loading" && <Skeleton />}
-
-        {state.status === "error" && (
-          <div role="alert" className="glass flex flex-wrap items-center gap-3 rounded-card border-danger/40 p-5 text-sm">
+        {error && (
+          <div role="alert" className="glass flex flex-wrap items-center gap-3 rounded-card border-danger/40 p-4 text-sm">
             <CircleAlert className="size-5 text-danger" aria-hidden />
-            <span className="flex-1">{state.message}</span>
+            <span className="flex-1">{error}{base ? " Son bilinen bilgiler gösteriliyor." : ""}</span>
             <button
               type="button"
               onClick={() => {
-                setState({ status: "loading" });
+                setRefreshing(true);
                 setReloadKey((k) => k + 1);
               }}
               className="rounded-xl border border-line px-3 py-1.5 text-sm hover:bg-surface-2"
@@ -136,18 +174,37 @@ export function ProfileView() {
           </div>
         )}
 
-        {state.status === "ready" && <ProfileContent profile={state.profile} onSignOut={signOut} leaving={leaving} />}
+        {base ? (
+          <ProfileContent base={base} details={details} failed={!!error && !details} onAvatarChange={onAvatarChange} onSignOut={signOut} leaving={leaving} />
+        ) : (
+          !error && <Skeleton />
+        )}
       </div>
     </main>
   );
 }
 
-function ProfileContent({ profile: p, onSignOut, leaving }: { profile: ProfileDetails; onSignOut: () => void; leaving: boolean }) {
+function ProfileContent({
+  base: p,
+  details,
+  failed,
+  onAvatarChange,
+  onSignOut,
+  leaving,
+}: {
+  base: UserProfile;
+  details: ProfileDetails | null;
+  /** Ayrıntılar yüklenemedi (iskelet yerine açıklama gösterilir) */
+  failed: boolean;
+  onAvatarChange: (avatarUrl: string | null) => void;
+  onSignOut: () => void;
+  leaving: boolean;
+}) {
   const clinician = p.role === "clinician";
   const profession = PROFESSIONS.find((x) => x.id === p.profession);
   const verified = p.verificationStatus === "verified";
   const rejected = p.verificationStatus === "rejected";
-  const consentByKind = new Map(p.consents.map((c) => [c.kind, c]));
+  const consentByKind = new Map((details?.consents ?? []).map((c) => [c.kind, c]));
 
   return (
     <>
@@ -155,15 +212,7 @@ function ProfileContent({ profile: p, onSignOut, leaving }: { profile: ProfileDe
       <section className="glass relative overflow-hidden rounded-card p-5 sm:p-7 animate-rise" aria-label="Kullanıcı bilgileri">
         <div aria-hidden className={cn("absolute -top-24 -right-24 size-72 rounded-full opacity-20 blur-3xl", clinician ? "bg-teal" : "bg-accent")} />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-          <span
-            className={cn(
-              "grid size-20 shrink-0 place-items-center rounded-2xl border text-2xl font-semibold tracking-tight",
-              clinician ? "border-teal/40 bg-teal/12 text-teal" : "border-accent/40 bg-accent/12 text-accent",
-            )}
-            aria-hidden
-          >
-            {initials(p)}
-          </span>
+          <AvatarEditor user={p} onChange={onAvatarChange} />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
               {clinician && profession && profession.id !== "nurse" ? `${profession.title} ` : ""}
@@ -204,7 +253,11 @@ function ProfileContent({ profile: p, onSignOut, leaving }: { profile: ProfileDe
                 ))}
               <span className="inline-flex items-center gap-1.5 text-xs text-muted">
                 <CalendarDays className="size-3.5" aria-hidden />
-                {dateFmt.format(new Date(p.createdAt))} tarihinden beri üye
+                {details ? (
+                  `${dateFmt.format(new Date(details.createdAt))} tarihinden beri üye`
+                ) : (
+                  <span className="inline-block h-3 w-40 animate-pulse rounded bg-surface-2" aria-label="Üyelik tarihi yükleniyor" />
+                )}
               </span>
             </div>
           </div>
@@ -237,10 +290,25 @@ function ProfileContent({ profile: p, onSignOut, leaving }: { profile: ProfileDe
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
                 <span className="relative inline-flex size-2 rounded-full bg-success" />
               </span>
-              {p.isActive ? "Aktif" : "Pasif"}
+              {details?.isActive === false ? "Pasif" : "Aktif"}
             </span>
           </div>
 
+          {!details && failed ? (
+            <p className="mt-3 px-1 text-sm text-muted">Onay kayıtları şu an yüklenemedi. Yukarıdaki “Tekrar dene” ile yenileyebilirsiniz.</p>
+          ) : !details ? (
+            <ul className="mt-3 grid gap-2" aria-busy="true" aria-label="Onaylar yükleniyor">
+              {CONSENTS.map(({ kind }) => (
+                <li key={kind} className="flex items-start gap-3 px-1 py-2">
+                  <span className="size-5 shrink-0 animate-pulse rounded-full bg-surface-2" />
+                  <span className="grid flex-1 gap-1.5">
+                    <span className="h-3.5 w-48 max-w-full animate-pulse rounded bg-surface-2" />
+                    <span className="h-3 w-64 max-w-full animate-pulse rounded bg-surface-2" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
           <ul className="mt-3 grid gap-2">
             {CONSENTS.map(({ kind, label, currentVersion }) => {
               const c = consentByKind.get(kind);
@@ -270,6 +338,7 @@ function ProfileContent({ profile: p, onSignOut, leaving }: { profile: ProfileDe
               );
             })}
           </ul>
+          )}
         </Card>
       </div>
 

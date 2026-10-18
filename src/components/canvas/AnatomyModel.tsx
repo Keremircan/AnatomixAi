@@ -9,8 +9,21 @@ import { useAnatomyStore, type MeshInfo } from "@/store/useAnatomyStore";
 
 const ACCENT = new Color("#22d3ee");
 
-/** "Üst üste" modunda iç katmanlar açıkken derinin otomatik şeffaflığı (SRS FR-4.3.2). */
-const SKIN_OVERLAY_OPACITY = 0.22;
+/**
+ * Anatomik derinlik sırası (dıştan içe; büyük = daha dışta). Üst üste modda iç içe geçen katmanların
+ * birbirini ezmemesi için hem çizim sırası (renderOrder) hem de derinlik ofseti (polygonOffset) buna göre verilir.
+ */
+const LAYER_DEPTH: Record<AnatomyLayer, number> = {
+  skin: 6,
+  muscular: 5,
+  joints: 4,
+  skeletal: 3,
+  digestive: 2, respiratory: 2, urinary: 2, genital: 2, endocrine: 2,
+  circulatory: 1, lymphatic: 1, nervous: 1,
+};
+/** Saydam katmanlar tüm opak katmanlardan sonra, dıştaki en son çizilir. */
+const TRANSLUCENT_ORDER_BASE = 10;
+const SELECTED_ORDER = 30;
 /** Bu değerin altındaki katmanlar tıklamayı alttaki katmana bırakır. */
 const PICKABLE_OPACITY = 0.5;
 /** Deri dosyasındaki göz yapıları sinir katmanında da var; üst üste modda ikisi birlikte açıksa derideki kopya gizlenir. */
@@ -59,17 +72,33 @@ function collectOriginals(scene: Object3D): Originals {
   return map;
 }
 
-/** Katman şeffaflığını dosyanın kendi malzemelerine uygular. */
-function applyOpacity(originals: Originals, opacity: number, isSkin: boolean) {
+/**
+ * Katman şeffaflığı ve iç içe katman hiyerarşisi.
+ * - Opak katman: derinliğe yazar (depthWrite), normal sırada çizilir. Deri gibi dış katmanlar, neredeyse
+ *   çakışan iç yüzeylerle (ör. deri altı kas) titreşmesin (z-fighting) diye polygonOffset ile kameraya doğru
+ *   çok az öne alınır; dıştaki katman çakışmada her zaman önde kalır.
+ * - Saydam katman: derinliğe yazmaz (arkasındaki katmanları silmez), opak katmanlardan sonra ve dıştan içe
+ *   değil içten dışa sırayla çizilir; kendi arka yüzleri görünmesin diye yalnızca ön yüzler çizilir.
+ */
+function applyOpacity(originals: Originals, opacity: number, layer: AnatomyLayer) {
   const translucent = opacity < 0.999;
+  const depth = LAYER_DEPTH[layer];
   for (const mat of new Set(originals.values())) {
+    (mat.userData as { baseSide?: number }).baseSide ??= mat.side;
+    const baseSide = (mat.userData as { baseSide: number }).baseSide;
     mat.transparent = translucent;
     mat.opacity = opacity;
     mat.depthWrite = !translucent;
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -depth * 0.5;
+    mat.polygonOffsetUnits = -depth * 2;
     // Opak deride arka yüz de çizilir: parça birleşimlerindeki mikro boşluklar zemin yerine deri rengiyle görünür.
-    // Saydamken tek yüz (çift katman görüntüsü olmasın).
-    if (isSkin) mat.side = translucent ? FrontSide : DoubleSide;
+    mat.side = translucent ? FrontSide : layer === "skin" ? DoubleSide : (baseSide as typeof FrontSide);
     mat.needsUpdate = true;
+  }
+  for (const mesh of originals.keys()) {
+    mesh.userData.baseOrder = translucent ? TRANSLUCENT_ORDER_BASE + depth : 0;
+    mesh.renderOrder = mesh.userData.baseOrder;
   }
 }
 
@@ -86,7 +115,8 @@ function applyHighlight(originals: Originals, selected?: string, hovered?: strin
     const name = meshName(mesh);
     const isSelected = name === selected;
     mesh.material = isSelected ? variantOf(base, "select") : name === hovered ? variantOf(base, "hover") : base;
-    mesh.renderOrder = isSelected ? 20 : base.transparent ? 10 : 0;
+    // Seçili yapı her şeyin üstünde (depthTest kapalı) çizilir; diğerleri katman sırasına döner.
+    mesh.renderOrder = isSelected ? SELECTED_ORDER : ((mesh.userData.baseOrder as number | undefined) ?? 0);
   }
 }
 
@@ -108,7 +138,7 @@ function SystemFile({ url, layer, opacity, pickable, hideSkinEyes }: FileProps) 
 
   // Orijinal malzemeler bir kez kaydedilir; dosyaların kendisi değiştirilmez.
   const originals = useMemo(() => collectOriginals(scene), [scene]);
-  useEffect(() => applyOpacity(originals, opacity, layer === "skin"), [originals, opacity, layer]);
+  useEffect(() => applyOpacity(originals, opacity, layer), [originals, opacity, layer]);
   useEffect(() => applyMeshVisibility(originals, showEnvelopes, hideSkinEyes), [originals, showEnvelopes, hideSkinEyes]);
   useEffect(() => applyHighlight(originals, selected, hovered), [originals, selected, hovered, opacity]);
 
@@ -174,7 +204,6 @@ export function AnatomyModel({ lod }: { lod: Lod }) {
   const userOpacity = useAnatomyStore((s) => s.layerOpacity);
 
   const offsets = useMemo(() => figureOffsets(active, mode), [active, mode]);
-  const innerOn = active.some((l) => l !== "skin");
   const eyesClash = mode === "stacked" && active.includes("nervous");
 
   useEffect(() => () => void (document.body.style.cursor = ""), []);
@@ -182,8 +211,8 @@ export function AnatomyModel({ lod }: { lod: Lod }) {
   return (
     <group>
       {LAYERS.filter((l) => loaded.includes(l.id)).map((layer) => {
-        const autoSkin = mode === "stacked" && layer.id === "skin" && innerOn ? SKIN_OVERLAY_OPACITY : 1;
-        const opacity = userOpacity[layer.id] * autoSkin;
+        // Şeffaflık yalnızca kullanıcının kaydırıcıda seçtiği değerdir; deri dahil hiçbir katman kendiliğinden silikleşmez.
+        const opacity = userOpacity[layer.id];
         return (
           <LayerFigure
             key={`${lod}/${layer.id}`}

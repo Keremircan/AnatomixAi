@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState, useSyncExternalStore } from "react";
-import { Check, Columns3, Layers, RotateCcw, Search, type LucideIcon } from "lucide-react";
+import { Eye, EyeOff, Check, Columns3, Layers, RotateCcw, Search, type LucideIcon } from "lucide-react";
 import { formatMB, LAYERS, layerDef, MANIFEST_URL, pickLod, SIDE_TR, type AnatomyLayer, type Lod } from "@/lib/layers";
 import { useAnatomyStore, type ViewMode } from "@/store/useAnatomyStore";
 import { cn } from "@/lib/utils";
@@ -149,12 +149,31 @@ export function LayerControls({ className }: { className?: string }) {
   const setOpacity = useAnatomyStore((s) => s.setLayerOpacity);
   const envelopes = useAnatomyStore((s) => s.showEnvelopes);
   const setEnvelopes = useAnatomyStore((s) => s.setShowEnvelopes);
+  const showAll = useAnatomyStore((s) => s.showAllLayers);
+  const hideAll = useAnatomyStore((s) => s.hideAllLayers);
+  const mode = useAnatomyStore((s) => s.viewMode);
   const lod = useLod();
+
+  const allOn = active.length === LAYERS.length;
+  const noneOn = active.length === 0;
+  const totalBytes = LAYERS.reduce((sum, l) => sum + l.bytes[lod], 0);
+  // Deri tam opakken üst üste modda iç katmanlar derinin arkasında kalır; kullanıcıya tek tıkla çözüm önerilir.
+  const skinCovers = mode === "stacked" && active.includes("skin") && opacity.skin >= 0.99 && active.some((l) => l !== "skin");
 
   return (
     <nav aria-label="Anatomik sistemler" className={cn("glass rounded-2xl shadow-elev", className)}>
       {/* Dar ekran: yatay kaydırılan sistem çipleri */}
       <ul className="flex gap-1.5 p-1.5 md:hidden">
+        <li>
+          <button
+            type="button"
+            onClick={allOn ? hideAll : showAll}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-accent/40 px-2.5 text-xs font-semibold whitespace-nowrap text-accent"
+          >
+            {allOn ? <EyeOff className="size-3.5" aria-hidden /> : <Eye className="size-3.5" aria-hidden />}
+            {allOn ? "Tümünü gizle" : "Tümünü göster"}
+          </button>
+        </li>
         {LAYERS.map((l) => {
           const on = active.includes(l.id);
           return (
@@ -176,6 +195,42 @@ export function LayerControls({ className }: { className?: string }) {
       {/* Geniş ekran: arama, sistem listesi, şeffaflık ve zar seçeneği */}
       <div className="hidden flex-col gap-3 p-3 md:flex">
         <StructureSearch />
+
+        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Toplu katman işlemleri">
+          <button
+            type="button"
+            onClick={showAll}
+            disabled={allOn}
+            title={`Tüm sistemleri göster (toplam ≈ ${formatMB(totalBytes)})`}
+            className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-accent/40 bg-accent/10 text-[12px] font-semibold text-accent transition hover:bg-accent/15 disabled:cursor-default disabled:opacity-45"
+          >
+            <Eye className="size-3.5" aria-hidden />
+            Tümünü göster
+          </button>
+          <button
+            type="button"
+            onClick={hideAll}
+            disabled={noneOn}
+            title="Tüm sistemleri gizle"
+            className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-line text-[12px] font-medium text-muted transition hover:bg-surface-2 hover:text-foreground disabled:cursor-default disabled:opacity-45"
+          >
+            <EyeOff className="size-3.5" aria-hidden />
+            Tümünü gizle
+          </button>
+        </div>
+
+        {skinCovers && (
+          <div className="flex items-start gap-2 rounded-xl border border-caution/35 bg-caution/8 px-3 py-2 text-[11px] leading-snug animate-rise">
+            <span className="flex-1 text-foreground/85">Deri tam opak; açtığınız iç katmanlar derinin arkasında kalıyor.</span>
+            <button
+              type="button"
+              onClick={() => setOpacity("skin", 0.3)}
+              className="shrink-0 rounded-lg bg-caution/15 px-2 py-1 font-semibold text-caution transition hover:bg-caution/25"
+            >
+              Deriyi %30 yap
+            </button>
+          </div>
+        )}
 
         <ul className="flex flex-col">
           {LAYERS.map((l) => {
@@ -265,7 +320,8 @@ export function ViewModeToggle({ className }: { className?: string }) {
               )}
             >
               <Icon className="size-4" aria-hidden />
-              <span className="hidden sm:inline">{label}</span>
+              {/* 3B alan dar olduğunda (kapsayıcı genişliği) yalnızca ikon gösterilir; ad ekran okuyucuya kalır. */}
+              <span className="sr-only @min-[54rem]:not-sr-only">{label}</span>
             </button>
           );
         })}

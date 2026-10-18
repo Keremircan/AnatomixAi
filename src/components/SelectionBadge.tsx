@@ -10,8 +10,11 @@ export function SelectionBadge() {
   const hovered = useAnatomyStore((s) => s.hoveredMesh);
   const clear = useAnatomyStore((s) => s.setSelectedMesh);
   const mesh = selected ?? hovered;
+  const anyLayer = useAnatomyStore((s) => s.activeLayers.length > 0);
 
   if (!mesh) {
+    // Boş sahnede yönlendirme kartı yeterli; seçim ipucu gösterilmez.
+    if (!anyLayer) return null;
     return (
       <div className="glass flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted">
         <MousePointerClick className="size-4" aria-hidden />

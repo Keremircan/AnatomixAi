@@ -23,6 +23,8 @@ export interface UserProfile {
   /** Uzman hesabı yönetici tarafından doğrulanana kadar false (SRS §2.2) */
   verified?: boolean;
   verificationStatus?: VerificationStatus;
+  /** Profil fotoğrafı adresi ("/api/user/avatar?v=…"); yoksa baş harfler gösterilir. */
+  avatarUrl?: string;
 }
 
 export type ConsentKind = "medical_disclaimer" | "health_data_processing" | "adult_declaration";
@@ -134,3 +136,22 @@ export async function fetchProfileDetails(): Promise<ProfileDetails | null> {
   if (!res.ok) throw new AuthError("Profil bilgileri yüklenemedi. Lütfen tekrar deneyin.", `HTTP ${res.status}`);
   return ((await res.json()) as { profile: ProfileDetails }).profile;
 }
+
+/** Profil fotoğrafını yükler (görsel tarayıcıda hazırlanmış olmalı); yeni adresi döndürür. */
+export async function uploadAvatar(image: Blob): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch("/api/user/avatar", { method: "POST", headers: { "Content-Type": image.type }, body: image, credentials: "same-origin" });
+  } catch {
+    throw new AuthError("Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.");
+  }
+  const data = (await res.json().catch(() => null)) as { avatarUrl?: string; error?: string } | null;
+  if (!res.ok || !data?.avatarUrl) throw new AuthError(data?.error ?? "Fotoğraf yüklenemedi. Lütfen tekrar deneyin.");
+  return data.avatarUrl;
+}
+
+export async function removeAvatar() {
+  const res = await fetch("/api/user/avatar", { method: "DELETE", credentials: "same-origin" }).catch(() => null);
+  if (!res?.ok) throw new AuthError("Fotoğraf kaldırılamadı. Lütfen tekrar deneyin.");
+}
+

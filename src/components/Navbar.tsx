@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSignOut } from "@/hooks/useSignOut";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Clock, LoaderCircle, LogIn, LogOut, Scale, Stethoscope, UserRound, X } from "lucide-react";
 import { displayName, PROFESSIONS, type UserProfile } from "@/lib/auth";
 import { useAnatomyStore, type UserRole } from "@/store/useAnatomyStore";
@@ -79,12 +80,6 @@ function UserMenu({ user }: { user: UserProfile }) {
   const profession = PROFESSIONS.find((p) => p.id === user.profession)?.label;
   const pending = user.role === "clinician" && !user.verified;
   const rejected = user.verificationStatus === "rejected";
-  const initials = (user.fullName || user.email)
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toLocaleUpperCase("tr-TR"))
-    .join("");
 
   return (
     <div className="flex shrink-0 items-center gap-2 border-l border-line pl-2 sm:gap-3 sm:pl-3">
@@ -95,9 +90,7 @@ function UserMenu({ user }: { user: UserProfile }) {
         title="Profilim"
         className={cn("flex min-w-0 items-center gap-2.5 rounded-xl p-1 pr-2 transition hover:bg-surface-2", onProfile && "bg-surface-2 ring-1 ring-accent/30")}
       >
-        <span className={cn("grid size-9 shrink-0 place-items-center rounded-full border text-xs font-semibold", badge.cls)} aria-hidden>
-          {initials}
-        </span>
+        <UserAvatar user={user} size={36} className="rounded-full" textClassName="text-xs" />
         <span className="hidden min-w-0 leading-tight md:block">
           <span className="block max-w-48 truncate text-[13px] font-medium">{displayName(user)}</span>
           <span className="block max-w-48 truncate text-[11px] text-muted">{user.email}</span>

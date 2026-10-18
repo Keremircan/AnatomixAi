@@ -130,6 +130,14 @@ function RegionSync({ result }: { result: AnalysisResult }) {
   const selected = useAnatomyStore((s) => s.selectedMesh?.name);
   const synced = !!result.meshIdToHighlight && selected === result.meshIdToHighlight;
   const layer = result.meshIdToHighlight ? layerOfMesh(result.meshIdToHighlight) : undefined;
+  const showLayer = useAnatomyStore((s) => s.showLayer);
+  const select = useAnatomyStore((s) => s.setSelectedMesh);
+  /** Kamerayı bölgeye yeniden odaklar (katman kapatılmışsa yeniden açar). */
+  const refocus = () => {
+    if (!result.meshIdToHighlight || !layer) return;
+    showLayer(layer);
+    select({ name: result.meshIdToHighlight, label: result.primaryRegion, layer, focusRadius: 0.16 });
+  };
   return (
     <section className="glass flex items-center gap-3 rounded-card p-3.5">
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-pain/12 text-pain">
@@ -141,10 +149,18 @@ function RegionSync({ result }: { result: AnalysisResult }) {
         {result.meshIdToHighlight && <div className="truncate font-mono text-[10px] text-muted">{result.meshIdToHighlight}</div>}
       </div>
       {result.meshIdToHighlight && (
-        <span className={cn("flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px]", synced ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-muted")}>
+        <button
+          type="button"
+          onClick={refocus}
+          title="Kamerayı bu bölgeye odakla"
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+            synced ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20" : "border-line text-muted hover:border-accent/40 hover:text-accent",
+          )}
+        >
           <span className={cn("size-1.5 rounded-full", synced ? "animate-pulse bg-accent" : "bg-muted")} />
-          {synced ? `3B · ${layer ? layerDef(layer).short : ""}` : "3B seçimi değişti"}
-        </span>
+          {synced ? `3B · ${layer ? layerDef(layer).short : ""}` : "3B'de odakla"}
+        </button>
       )}
     </section>
   );

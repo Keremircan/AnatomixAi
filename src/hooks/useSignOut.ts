@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth";
+import { clearProfileCache } from "@/lib/profileCache";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 
 /** Çıkış: oturum çerezini sunucuda siler, yerel durumu (analiz dahil) temizler ve giriş ekranına döner. */
@@ -18,6 +19,7 @@ export function useSignOut() {
     } catch {
       // Ağ hatasında da yerel oturum temizlenir; çerez bir sonraki istekte proxy tarafından doğrulanır.
     }
+    clearProfileCache();
     logout();
     router.replace("/login");
     router.refresh();

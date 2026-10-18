@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "./db";
+import { db, withReadRetry } from "./db";
 import type { ConsentRecord, ProfileDetails, Profession, UserProfile, UserRole, VerificationStatus } from "@/lib/auth";
 
 type UserRow = {
@@ -13,9 +13,10 @@ type UserRow = {
   institution: string | null;
   verification_status: VerificationStatus;
   is_active: boolean;
+  avatar_url: string | null;
 };
 
-const COLUMNS = "id, email, password_hash, full_name, role, profession, specialty, institution, verification_status, is_active";
+const COLUMNS = "id, email, password_hash, full_name, role, profession, specialty, institution, verification_status, is_active, avatar_url";
 
 /** İstemciye gönderilen profil; parola özeti asla dahil edilmez. */
 export function toProfile(u: Omit<UserRow, "password_hash">): UserProfile {
@@ -29,6 +30,7 @@ export function toProfile(u: Omit<UserRow, "password_hash">): UserProfile {
     institution: u.institution ?? undefined,
     verificationStatus: u.verification_status,
     verified: u.role === "patient" || u.verification_status === "verified",
+    avatarUrl: u.avatar_url ?? undefined,
   };
 }
 
@@ -38,7 +40,7 @@ export async function findUserByEmail(email: string) {
 }
 
 export async function findActiveUserById(id: string) {
-  const [u] = await db()<UserRow[]>`select ${db().unsafe(COLUMNS)} from app.users where id = ${id} and is_active`;
+  const [u] = await withReadRetry(() => db()<UserRow[]>`select ${db().unsafe(COLUMNS)} from app.users where id = ${id} and is_active`);
   return u ?? null;
 }
 
@@ -81,26 +83,71 @@ export async function createUser(input: NewUser) {
   });
 }
 
-/** Profil sayfası için kullanıcı ayrıntıları ve her onay türünün en güncel kaydı. Kullanıcı yoksa/pasifse null. */
+/**
+ * Profil sayfası için kullanıcı ayrıntıları ve her onay türünün en güncel kaydı — tek sorguda.
+ * Veritabanı uzak bir bölgede olduğundan (her gidiş-dönüş yüzlerce ms) iki ayrı sorgu yerine
+ * onaylar alt sorguyla JSON olarak aynı satırda döner. Her iki erişim de indeksli (users.id, consents.user_id).
+ * Kullanıcı yoksa veya pasifse null.
+ */
 export async function getProfileDetails(id: string): Promise<ProfileDetails | null> {
-  const sql = db();
-  const [u] = await sql<(Omit<UserRow, "password_hash"> & { created_at: Date })[]>`
-    select id, email, full_name, role, profession, specialty, institution, verification_status, is_active, created_at
-    from app.users
-    where id = ${id} and is_active
-  `;
+  const [u] = await withReadRetry(() => db()<(Omit<UserRow, "password_hash"> & { created_at: Date; consents: ConsentRecord[] })[]>`
+    select
+      u.id, u.email, u.full_name, u.role, u.profession, u.specialty, u.institution,
+      u.verification_status, u.is_active, u.avatar_url, u.created_at,
+      coalesce((
+        select json_agg(json_build_object('kind', c.kind, 'version', c.version, 'acceptedAt', c.accepted_at) order by c.kind)
+        from (
+          select distinct on (kind) kind, version, accepted_at
+          from app.consents
+          where user_id = u.id
+          order by kind, accepted_at desc
+        ) c
+      ), '[]'::json) as consents
+    from app.users u
+    where u.id = ${id} and u.is_active
+  `);
   if (!u) return null;
-  const consents = await sql<{ kind: ConsentRecord["kind"]; version: string; accepted_at: Date }[]>`
-    select distinct on (kind) kind, version, accepted_at
-    from app.consents
-    where user_id = ${id}
-    order by kind, accepted_at desc
-  `;
   return {
     ...toProfile(u),
     id: u.id,
     isActive: u.is_active,
     createdAt: u.created_at.toISOString(),
-    consents: consents.map<ConsentRecord>((c) => ({ kind: c.kind, version: c.version, acceptedAt: c.accepted_at.toISOString() })),
+    consents: u.consents.map((c) => ({ ...c, acceptedAt: new Date(c.acceptedAt).toISOString() })),
   };
+}
+
+/* ───────────────────────── Profil fotoğrafı ───────────────────────── */
+
+export type AvatarMime = "image/jpeg" | "image/png" | "image/webp";
+
+/** Görseli kaydeder ve users.avatar_url'i yeni sürümle günceller (tarayıcı önbelleği sürümle kırılır). */
+export async function saveAvatar(userId: string, mime: AvatarMime, data: Uint8Array) {
+  return db().begin(async (tx) => {
+    const [row] = await tx<{ updated_at: Date }[]>`
+      insert into app.user_avatars (user_id, mime, data, updated_at)
+      values (${userId}, ${mime}, ${data}, now())
+      on conflict (user_id) do update set mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at
+      returning updated_at
+    `;
+    const url = `/api/user/avatar?v=${row.updated_at.getTime().toString(36)}`;
+    await tx`update app.users set avatar_url = ${url} where id = ${userId}`;
+    return url;
+  });
+}
+
+export async function getAvatar(userId: string) {
+  const [row] = await withReadRetry(() => db()<{ mime: AvatarMime; data: Buffer; updated_at: Date }[]>`
+    select a.mime, a.data, a.updated_at
+    from app.user_avatars a
+    join app.users u on u.id = a.user_id and u.is_active
+    where a.user_id = ${userId}
+  `);
+  return row ?? null;
+}
+
+export async function deleteAvatar(userId: string) {
+  await db().begin(async (tx) => {
+    await tx`delete from app.user_avatars where user_id = ${userId}`;
+    await tx`update app.users set avatar_url = null where id = ${userId}`;
+  });
 }
