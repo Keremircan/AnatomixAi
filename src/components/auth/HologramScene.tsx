@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Canvas, useFrame, useThree, type RootState } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
-import { AdditiveBlending, Color, FrontSide, Group, Mesh, MathUtils, ShaderMaterial, Vector3, type PerspectiveCamera } from "three";
+import { AdditiveBlending, Color, NormalBlending, FrontSide, Group, Mesh, MathUtils, ShaderMaterial, Vector3, type PerspectiveCamera } from "three";
 import { BODY, DRACO_PATH, modelUrl } from "@/lib/layers";
 import { FADE_SECONDS, HOLOGRAM_PHASES, PHASE_SECONDS } from "./hologramPhases";
 
@@ -32,6 +32,7 @@ const fragmentShader = /* glsl */ `
   uniform float uScanY;
   uniform float uScan;
   uniform float uTime;
+  uniform float uLight;
   varying vec3 vNormal;
   varying vec3 vView;
   varying float vY;
@@ -45,7 +46,9 @@ const fragmentShader = /* glsl */ `
     float core = exp(-d * d / 0.0016) * uScan;
     float trail = (d > 0.0 ? exp(-d / 0.18) : exp(d / 0.03)) * 0.9 * uScan;
 
-    vec3 color = uColor * (body * lines + trail * 1.6) + vec3(0.75, 1.0, 1.0) * core * 1.6 + uColor * core * 1.4;
+    // Koyu temada ışık çekirdeği beyaza çalar; açık temada (normal karışım) katman renginin doygun tonunda kalır.
+    vec3 flash = mix(vec3(0.75, 1.0, 1.0) * 1.6, uColor * 0.6, uLight);
+    vec3 color = uColor * (body * lines + trail * 1.6) + flash * core + uColor * core * 1.4;
     float alpha = clamp((body * lines * 0.85 + trail * 0.5 + core) * uOpacity, 0.0, 1.0);
     gl_FragColor = vec4(color, alpha);
   }
@@ -53,14 +56,18 @@ const fragmentShader = /* glsl */ `
 
 type ScanUniforms = { uScanY: { value: number }; uScan: { value: number }; uTime: { value: number } };
 
-function createHoloMaterial(color: string, shared: ScanUniforms) {
+/**
+ * Koyu temada toplamalı (additive) karışım: parlayan hologram. Açık temada toplamalı karışım beyaz zeminde
+ * kaybolur; bu yüzden normal karışım ve koyu tonlu renkler kullanılır.
+ */
+function createHoloMaterial(color: string, shared: ScanUniforms, light: boolean) {
   return new ShaderMaterial({
     vertexShader,
     fragmentShader,
-    uniforms: { uColor: { value: new Color(color) }, uOpacity: { value: 0 }, ...shared },
+    uniforms: { uColor: { value: new Color(color) }, uOpacity: { value: 0 }, uLight: { value: light ? 1 : 0 }, ...shared },
     transparent: true,
     depthWrite: false,
-    blending: AdditiveBlending,
+    blending: light ? NormalBlending : AdditiveBlending,
     side: FrontSide,
   });
 }
@@ -147,20 +154,22 @@ export type HologramSceneProps = {
   reducedMotion: boolean;
   onPhaseChange: (index: number) => void;
   onReady: () => void;
+  /** Açık tema: koyu tonlar ve normal karışım */
+  light: boolean;
 };
 
 /** Sahnenin değişken (her karede güncellenen) nesneleri; React render'ının dışında yaşar. */
-function createHologram() {
+function createHologram(light: boolean) {
   const shared: ScanUniforms = { uScanY: { value: -10 }, uScan: { value: 0 }, uTime: { value: 0 } };
   return {
     shared,
-    materials: HOLOGRAM_PHASES.map((p) => createHoloMaterial(p.color, shared)),
+    materials: HOLOGRAM_PHASES.map((p) => createHoloMaterial(light ? p.colorLight : p.color, shared, light)),
     floor: new ShaderMaterial({
       ...floorShader,
-      uniforms: { uColor: { value: new Color("#22d3ee") }, uTime: shared.uTime },
+      uniforms: { uColor: { value: new Color(light ? "#0e7490" : "#22d3ee") }, uTime: shared.uTime },
       transparent: true,
       depthWrite: false,
-      blending: AdditiveBlending,
+      blending: light ? NormalBlending : AdditiveBlending,
     }),
     figure: null as Group | null,
     groups: [] as (Group | null)[],
@@ -243,7 +252,7 @@ function stepHologram(h: HologramState, { clock, camera, gl }: RootState, props:
 
 function Hologram(props: HologramSceneProps) {
   const { onReady } = props;
-  const [h] = useState(createHologram);
+  const [h] = useState(() => createHologram(props.light));
   useEffect(() => () => disposeHologram(h), [h]);
 
   const readyHandlers = useMemo(
@@ -285,7 +294,8 @@ export default function HologramScene(props: HologramSceneProps) {
       style={{ position: "absolute", inset: 0 }}
       aria-hidden
     >
-      <Hologram {...props} />
+      {/* Tema değişince malzemeler yeni karışım kipiyle yeniden kurulur (modeller önbellekten gelir). */}
+      <Hologram key={props.light ? "light" : "dark"} {...props} />
     </Canvas>
   );
 }

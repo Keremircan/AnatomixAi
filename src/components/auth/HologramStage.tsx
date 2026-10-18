@@ -2,6 +2,7 @@
 
 import { Component, useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { HOLOGRAM_PHASES, PHASE_SECONDS } from "./hologramPhases";
 
@@ -72,6 +73,7 @@ const CORNERS = [
 export function HologramStage({ className }: { className?: string }) {
   const wide = useMedia("(min-width: 64rem)");
   const reducedMotion = useMedia("(prefers-reduced-motion: reduce)");
+  const light = useTheme().resolvedTheme === "light";
   const [ready, setReady] = useState(false);
   const [phase, setPhase] = useState(0);
   const [request, setRequest] = useState<{ index: number; nonce: number } | null>(null);
@@ -87,7 +89,7 @@ export function HologramStage({ className }: { className?: string }) {
       {/* Zemin: merkezde soğuk ışıma ve solan nokta ızgarası */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(50%_45%_at_50%_48%,color-mix(in_oklab,var(--accent)_16%,transparent),transparent_75%)]" />
       <div
-        className="absolute inset-0 -z-10 opacity-50"
+        className="absolute inset-0 -z-10 opacity-25 dark:opacity-50"
         style={{
           backgroundImage: "radial-gradient(color-mix(in oklab, var(--accent) 35%, transparent) 1px, transparent 1px)",
           backgroundSize: "22px 22px",
@@ -97,14 +99,14 @@ export function HologramStage({ className }: { className?: string }) {
 
       {wide && active && (
         <SceneBoundary>
-          <HologramScene beamRef={beamRef} request={request} reducedMotion={reducedMotion} onPhaseChange={setPhase} onReady={onReady} />
+          <HologramScene beamRef={beamRef} request={request} reducedMotion={reducedMotion} onPhaseChange={setPhase} onReady={onReady} light={light} />
         </SceneBoundary>
       )}
 
       {/* Biyometrik çerçeve */}
       <div className="pointer-events-none absolute inset-x-[16%] inset-y-[5%]">
         {CORNERS.map((c) => (
-          <span key={c} className={cn("absolute size-7 border-accent/50", c)} />
+          <span key={c} className={cn("absolute size-7 border-accent/35 dark:border-accent/50", c)} />
         ))}
       </div>
 
@@ -137,20 +139,22 @@ export function HologramStage({ className }: { className?: string }) {
                 type="button"
                 tabIndex={-1}
                 onClick={() => setRequest({ index: i, nonce: Date.now() })}
+                // Renk tonunu tema sınıfı seçer (JS değil): sunucu ve tarayıcı aynı işaretlemeyi üretir.
+                style={{ "--phase": p.color, "--phase-light": p.colorLight } as React.CSSProperties}
                 className={cn(
                   "relative overflow-hidden rounded-full px-3 py-1 text-[11px] font-medium transition",
                   on ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground",
                 )}
               >
                 <span className="relative flex items-center gap-1.5">
-                  <span className="size-1.5 rounded-full" style={{ background: p.color, boxShadow: on ? `0 0 8px ${p.color}` : undefined }} />
+                  <span className={cn("size-1.5 rounded-full bg-(--phase) light:bg-(--phase-light)", on && "dark:shadow-[0_0_8px_var(--phase)]")} />
                   {p.label}
                 </span>
                 {on && !reducedMotion && (
                   <span
                     key={`${phase}-${request?.nonce ?? 0}`}
-                    className="absolute inset-x-2 bottom-0 h-px origin-left animate-phase-progress"
-                    style={{ background: p.color, animationDuration: `${PHASE_SECONDS}s` }}
+                    className="absolute inset-x-2 bottom-0 h-px origin-left animate-phase-progress bg-(--phase) light:bg-(--phase-light)"
+                    style={{ animationDuration: `${PHASE_SECONDS}s` }}
                   />
                 )}
               </button>

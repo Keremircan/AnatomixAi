@@ -284,7 +284,8 @@ export default function Scene3D() {
       <Canvas
         dpr={[1, 2]}
         camera={{ position: [0, 0.9, 4.1], fov: 32, near: 0.01, far: 80 }}
-        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        // stencil: saydam deri her pikselde yalnızca bir kez boyanır (AnatomyModel → applyOpacity)
+        gl={{ antialias: true, alpha: true, stencil: true, powerPreference: "high-performance" }}
         onPointerMissed={() => clearSelection(null)}
       >
         {/* Yumuşak stüdyo ışığı + cyan kenar ışığı */}

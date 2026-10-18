@@ -3,7 +3,10 @@
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { Color, DoubleSide, FrontSide, type Group, MathUtils, Mesh, type Material, MeshStandardMaterial, type Object3D } from "three";
+import {
+  type BufferGeometry, Color, DoubleSide, FrontSide, type Group, MathUtils, Mesh, type Material, MeshBasicMaterial, MeshStandardMaterial,
+  NotEqualStencilFunc, type Object3D, ReplaceStencilOp,
+} from "three";
 import { DRACO_PATH, figureOffsets, LAYERS, modelUrl, type AnatomyLayer, type Lod } from "@/lib/layers";
 import { useAnatomyStore, type MeshInfo } from "@/store/useAnatomyStore";
 
@@ -43,6 +46,8 @@ function variantOf(base: Material, kind: "hover" | "select") {
       m.transparent = false;
       m.opacity = 1;
       m.depthWrite = true;
+      m.alphaTest = 0;
+      m.stencilWrite = false;
       return m;
     };
     const select = make(0.65);
@@ -67,9 +72,45 @@ const isEnvelope = (o: Object3D) => !!o.userData.hidden;
 function collectOriginals(scene: Object3D): Originals {
   const map: Originals = new Map();
   scene.traverse((o) => {
-    if (o instanceof Mesh) map.set(o, o.material as Material);
+    if (o instanceof Mesh && !o.userData.isDepthPrepass) map.set(o, o.material as Material);
   });
   return map;
+}
+
+/** Normal verisi hiç yoksa ya da bozuksa (NaN / sıfır uzunluk) yeniden hesaplanır; sağlam normallere dokunulmaz. */
+function repairNormals(geometry: BufferGeometry) {
+  const n = geometry.getAttribute("normal");
+  if (n) {
+    let ok = true;
+    for (let i = 0; i < n.count && ok; i++) {
+      const len = Math.hypot(n.getX(i), n.getY(i), n.getZ(i));
+      ok = Number.isFinite(len) && len > 1e-4;
+    }
+    if (ok) return;
+  }
+  geometry.computeVertexNormals();
+}
+
+/** Kıllar (saç, kaş, kirpik, pubik) yoğun ince geometridir; saydam deride tek katman geçişine katılmaz, silik çizilir. */
+const isHair = (m: Material) => m.name === "AX_hair";
+
+/**
+ * Saydam deri için derinlik ön geçişi: her deri parçasının altına yalnızca derinlik yazan bir kopya eklenir.
+ * Renk geçişi bu derinlikle eşleşen (en öndeki) yüzeyi stencil ile tek bir kez boyar; üst üste binen parçalar
+ * iki kez karışıp koyu bant / yırtılma oluşturmaz, arkada kalan deri yüzeyleri öndekinin içinden görünmez.
+ */
+function ensureDepthPrepass(originals: Originals) {
+  let material: MeshBasicMaterial | undefined;
+  for (const [mesh, base] of originals) {
+    if (mesh.userData.depthPrepass || isHair(base)) continue;
+    material ??= new MeshBasicMaterial({ colorWrite: false, depthWrite: true, transparent: true, side: DoubleSide, polygonOffset: true });
+    const pre = new Mesh(mesh.geometry, material);
+    pre.userData.isDepthPrepass = true;
+    pre.raycast = () => {};
+    pre.visible = false;
+    mesh.add(pre);
+    mesh.userData.depthPrepass = pre;
+  }
 }
 
 /**
@@ -83,29 +124,57 @@ function collectOriginals(scene: Object3D): Originals {
 function applyOpacity(originals: Originals, opacity: number, layer: AnatomyLayer) {
   const translucent = opacity < 0.999;
   const depth = LAYER_DEPTH[layer];
+  const skin = layer === "skin";
+  // Saydam deri: derinlik ön geçişi + stencil ile tek katman (bkz. ensureDepthPrepass)
+  const prepass = skin && translucent;
+  const factor = -depth * 0.5;
+  const units = -depth * 2;
   for (const mat of new Set(originals.values())) {
     (mat.userData as { baseSide?: number }).baseSide ??= mat.side;
     const baseSide = (mat.userData as { baseSide: number }).baseSide;
+    const single = prepass && !isHair(mat);
     mat.transparent = translucent;
     mat.opacity = opacity;
-    mat.depthWrite = !translucent;
+    mat.depthWrite = !translucent || single;
+    mat.alphaTest = single ? 0.05 : 0;
     mat.polygonOffset = true;
-    mat.polygonOffsetFactor = -depth * 0.5;
-    mat.polygonOffsetUnits = -depth * 2;
-    // Opak deride arka yüz de çizilir: parça birleşimlerindeki mikro boşluklar zemin yerine deri rengiyle görünür.
-    mat.side = translucent ? FrontSide : layer === "skin" ? DoubleSide : (baseSide as typeof FrontSide);
+    mat.polygonOffsetFactor = factor;
+    mat.polygonOffsetUnits = units;
+    // Deri her durumda çift yüzlü: ters sarılmış parçalar ve birleşimlerdeki mikro boşluklar delik gibi görünmez.
+    // Diğer saydam katmanlarda kendi arka yüzleri görünmesin diye yalnızca ön yüz çizilir.
+    mat.side = skin && !(translucent && isHair(mat)) ? DoubleSide : translucent ? FrontSide : (baseSide as typeof FrontSide);
+    mat.forceSinglePass = skin;
+    mat.stencilWrite = single;
+    mat.stencilRef = 1;
+    mat.stencilFunc = NotEqualStencilFunc;
+    mat.stencilZPass = ReplaceStencilOp;
     mat.needsUpdate = true;
   }
-  for (const mesh of originals.keys()) {
-    mesh.userData.baseOrder = translucent ? TRANSLUCENT_ORDER_BASE + depth : 0;
+  for (const [mesh, base] of originals) {
+    // Saydam deride kıllar deri yüzeyinden sonra çizilir (derinlik yazmadıkları için deriyi örtmezler).
+    mesh.userData.baseOrder = translucent ? TRANSLUCENT_ORDER_BASE + depth + (prepass && isHair(base) ? 0.25 : 0) : 0;
     mesh.renderOrder = mesh.userData.baseOrder;
+    const pre = mesh.userData.depthPrepass as Mesh<BufferGeometry, MeshBasicMaterial> | undefined;
+    if (pre) {
+      pre.visible = prepass;
+      // Kendi rengi boyanmadan hemen önce, iç katmanların saydam geçişlerinden sonra çizilir.
+      pre.renderOrder = mesh.userData.baseOrder - 0.5;
+      pre.material.polygonOffsetFactor = factor;
+      pre.material.polygonOffsetUnits = units;
+    }
   }
 }
 
-/** Zar/fasya ve çakışan göz yapılarının görünürlüğü. */
-function applyMeshVisibility(originals: Originals, showEnvelopes: boolean, hideSkinEyes: boolean) {
+/**
+ * Zar/fasya ve çakışan göz yapılarının görünürlüğü.
+ * `occluded`: üst üste modda deri tamamen opakken içerideki katmanlar zaten görünmez; yine de çizilirlerse deri
+ * parçaları arasındaki piksel altı çatlaklardan (dosyadaki T-birleşimler) kemik vb. beyaz nokta/çizgi olarak sızar.
+ * Bu durumda yalnızca seçili yapı (derinin içinden vurgulu çizilir) görünür kalır.
+ */
+function applyMeshVisibility(originals: Originals, showEnvelopes: boolean, hideSkinEyes: boolean, occluded: boolean, selected?: string) {
   for (const mesh of originals.keys()) {
-    mesh.visible = (showEnvelopes || !isEnvelope(mesh)) && !(hideSkinEyes && SKIN_EYES.test(meshName(mesh)));
+    const name = meshName(mesh);
+    mesh.visible = occluded ? name === selected : (showEnvelopes || !isEnvelope(mesh)) && !(hideSkinEyes && SKIN_EYES.test(name));
   }
 }
 
@@ -125,10 +194,10 @@ function infoOf(obj: Object3D, layer: AnatomyLayer): MeshInfo {
   return { name: meshName(obj), label: extras.label, group: extras.group, layer };
 }
 
-type FileProps = { url: string; layer: AnatomyLayer; opacity: number; pickable: boolean; hideSkinEyes: boolean };
+type FileProps = { url: string; layer: AnatomyLayer; opacity: number; pickable: boolean; hideSkinEyes: boolean; occluded: boolean };
 
 /** Bir sistem dosyası (ör. skeletal.glb). Yüklenen sahne useGLTF önbelleğinden gelir; kopyalanmaz. */
-function SystemFile({ url, layer, opacity, pickable, hideSkinEyes }: FileProps) {
+function SystemFile({ url, layer, opacity, pickable, hideSkinEyes, occluded }: FileProps) {
   const { scene } = useGLTF(url, DRACO_PATH);
   const setSelected = useAnatomyStore((s) => s.setSelectedMesh);
   const setHovered = useAnatomyStore((s) => s.setHoveredMesh);
@@ -137,9 +206,19 @@ function SystemFile({ url, layer, opacity, pickable, hideSkinEyes }: FileProps) 
   const showEnvelopes = useAnatomyStore((s) => s.showEnvelopes);
 
   // Orijinal malzemeler bir kez kaydedilir; dosyaların kendisi değiştirilmez.
-  const originals = useMemo(() => collectOriginals(scene), [scene]);
+  const originals = useMemo(() => {
+    const map = collectOriginals(scene);
+    if (layer === "skin") {
+      for (const mesh of map.keys()) repairNormals(mesh.geometry as BufferGeometry);
+      ensureDepthPrepass(map);
+    }
+    return map;
+  }, [scene, layer]);
   useEffect(() => applyOpacity(originals, opacity, layer), [originals, opacity, layer]);
-  useEffect(() => applyMeshVisibility(originals, showEnvelopes, hideSkinEyes), [originals, showEnvelopes, hideSkinEyes]);
+  useEffect(
+    () => applyMeshVisibility(originals, showEnvelopes, hideSkinEyes, occluded, selected),
+    [originals, showEnvelopes, hideSkinEyes, occluded, selected],
+  );
   useEffect(() => applyHighlight(originals, selected, hovered), [originals, selected, hovered, opacity]);
 
   // Olay arkadaki katmana geçsin diye uygun olmayan durumda stopPropagation çağrılmaz.
@@ -169,8 +248,8 @@ function SystemFile({ url, layer, opacity, pickable, hideSkinEyes }: FileProps) 
 }
 
 /** Bir anatomik sistem figürü; X konumu hedefe doğru yumuşakça kayar. */
-function LayerFigure({ id, lod, visible, x, opacity, pickable, hideSkinEyes }: {
-  id: AnatomyLayer; lod: Lod; visible: boolean; x: number; opacity: number; pickable: boolean; hideSkinEyes: boolean;
+function LayerFigure({ id, lod, visible, x, opacity, pickable, hideSkinEyes, occluded }: {
+  id: AnatomyLayer; lod: Lod; visible: boolean; x: number; opacity: number; pickable: boolean; hideSkinEyes: boolean; occluded: boolean;
 }) {
   const ref = useRef<Group>(null);
   const placed = useRef(false);
@@ -191,7 +270,7 @@ function LayerFigure({ id, lod, visible, x, opacity, pickable, hideSkinEyes }: {
     <group ref={ref} visible={visible} name={`layer:${id}`}>
       {/* Her katman kendi Suspense sınırında: yeni bir sistem yüklenirken diğerleri ekranda kalır. */}
       <Suspense fallback={null}>
-        <SystemFile url={modelUrl(lod, id)} layer={id} opacity={opacity} pickable={visible && pickable} hideSkinEyes={hideSkinEyes} />
+        <SystemFile url={modelUrl(lod, id)} layer={id} opacity={opacity} pickable={visible && pickable} hideSkinEyes={hideSkinEyes} occluded={occluded} />
       </Suspense>
     </group>
   );
@@ -205,6 +284,8 @@ export function AnatomyModel({ lod }: { lod: Lod }) {
 
   const offsets = useMemo(() => figureOffsets(active, mode), [active, mode]);
   const eyesClash = mode === "stacked" && active.includes("nervous");
+  // Üst üste modda tam opak deri, içindeki tüm katmanları örter.
+  const skinCovers = mode === "stacked" && active.includes("skin") && userOpacity.skin >= 0.999;
 
   useEffect(() => () => void (document.body.style.cursor = ""), []);
 
@@ -223,6 +304,7 @@ export function AnatomyModel({ lod }: { lod: Lod }) {
             opacity={opacity}
             pickable={opacity >= PICKABLE_OPACITY}
             hideSkinEyes={layer.id === "skin" && eyesClash}
+            occluded={skinCovers && layer.id !== "skin"}
           />
         );
       })}

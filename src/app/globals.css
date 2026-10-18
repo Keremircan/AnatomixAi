@@ -175,6 +175,14 @@ dialog::backdrop {
   animation: rise 0.25s ease-out both;
 }
 
+/* Giriş ekranı sol vitrin paneli: koyu temada sayfa zemini, açık temada yumuşak klinik mavi-gri geçiş */
+.showcase {
+  background: var(--background);
+}
+.light .showcase {
+  background: linear-gradient(180deg, #eef3f8 0%, #f0f9ff 55%, #ffffff 100%);
+}
+
 /* Navbar oturum iskeleti: son oturumun rol rozetiyle aynı genişlik (<html data-anx-role>, layout'taki betik) */
 .role-hint {
   display: none;

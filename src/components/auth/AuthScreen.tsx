@@ -168,19 +168,21 @@ export function AuthScreen() {
 
   return (
     <main className="grid flex-1 lg:h-[calc(100dvh-4rem)] lg:flex-none lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:overflow-hidden">
-      {/* Sol: hologram ve marka mesajı (her temada koyu "ekran" yüzeyi) */}
-      <section className="dark relative hidden min-h-0 flex-col overflow-hidden border-r border-line bg-[#03070d] text-foreground lg:flex">
+      {/* Sol: hologram ve marka mesajı. Zemin temaya göre: koyu "ekran" ya da yumuşak klinik açık mavi-gri. */}
+      <section className="showcase relative hidden min-h-0 flex-col overflow-hidden border-r border-line text-foreground lg:flex">
         <div aria-hidden className="absolute -top-40 -left-24 size-[520px] rounded-full bg-accent/10 blur-3xl" />
         <div className="relative px-10 pt-9 xl:px-14 short:pt-6">
           <span className="inline-flex items-center gap-2 rounded-full border border-accent/35 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
             <ShieldCheck className="size-3.5" aria-hidden />
             Klinik ön triyaj · poliklinik yönlendirme
           </span>
-          <h1 className="mt-4 max-w-lg text-[34px] leading-[1.08] font-semibold tracking-[-0.03em] xl:text-[40px] short:mt-3 short:text-[30px]">
-            Şikayetinizi gösterin. <span className="text-accent">Nereye başvuracağınızı</span> öğrenin.
+          <h1 className="mt-4 max-w-[40rem] text-[28px] leading-[1.12] font-semibold tracking-[-0.03em] xl:text-[33px] short:mt-3 short:text-[26px]">
+            Semptomlarınızı 3B Anatomide Keşfedin.
+            <span className="mt-1 block text-accent">Akıllı Triyaj ile Doğru Klinik Adımı Atın.</span>
           </h1>
-          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted short:hidden">
-            Semptomunuzu yazın ya da 3B model üzerinde işaretleyin. ANATOMIX.AI aciliyet seviyesini ve ilgili polikliniği önerir; tanı koymaz.
+          <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-muted short:hidden">
+            Şikayetinizi interaktif anatomik model üzerinde işaretleyin; yapay zeka destekli ön triyaj, poliklinik yönlendirmesi ve kanıta dayalı
+            sağlık rehberliğine anında ulaşın.
           </p>
         </div>
 
