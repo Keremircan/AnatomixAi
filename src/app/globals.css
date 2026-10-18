@@ -68,6 +68,13 @@
 
 /* dark: ön ekli sınıflar <html class="dark"> ile çalışsın (Tailwind v4'te varsayılan prefers-color-scheme'dir). */
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant light (&:where(.light, .light *));
+/* Kısa masaüstü ekranları (ör. 1366×768): giriş ekranı kaydırmasız sığsın diye boşluklar sıkışır. */
+@custom-variant short {
+  @media (max-height: 820px) {
+    @slot;
+  }
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -168,44 +175,81 @@ dialog::backdrop {
   animation: rise 0.25s ease-out both;
 }
 
-/* Giriş ekranı: silüet üzerinde aşağı inen tarama çizgisi ve nabız noktaları */
-@keyframes scan {
-  0% {
-    transform: translateY(-10%);
+/* Navbar oturum iskeleti: son oturumun rol rozetiyle aynı genişlik (<html data-anx-role>, layout'taki betik) */
+.role-hint {
+  display: none;
+}
+@media (width >= 40rem) {
+  :root:not([data-anx-role]) .role-hint[data-role-hint="patient"],
+  :root[data-anx-role="patient"] .role-hint[data-role-hint="patient"],
+  :root[data-anx-role="clinician"] .role-hint[data-role-hint="clinician"],
+  :root[data-anx-role="clinician-pending"] .role-hint[data-role-hint="clinician-pending"],
+  :root[data-anx-role="clinician-rejected"] .role-hint[data-role-hint="clinician-rejected"] {
+    display: flex;
+  }
+}
+
+/* Logo simgesindeki tarama ışını (giriş ekranı başlığı) */
+@keyframes mark-scan {
+  0%,
+  100% {
+    transform: translateY(-11px);
     opacity: 0;
   }
-  10%,
-  90% {
+  15%,
+  85% {
     opacity: 1;
   }
-  100% {
-    transform: translateY(110%);
-    opacity: 0;
+  50% {
+    transform: translateY(11px);
   }
 }
-@utility animate-scan {
-  animation: scan 4.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+@utility animate-mark-scan {
+  animation: mark-scan 3.6s ease-in-out infinite;
 }
-@keyframes pulse-ring {
+
+/* Giriş ekranı hologramı: yukarıdan aşağı süzülen, kenarları dağılmış biyometrik tarama ışığı.
+   3B sahne ışığın ekrandaki konumunu her karede okuyup aynı yüksekliği modelin üzerinde parlatır. */
+@keyframes beam {
   0% {
-    transform: scale(0.6);
-    opacity: 0.9;
+    transform: translateY(0%);
+    opacity: 0;
   }
+  8% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  80%,
   100% {
-    transform: scale(2.4);
+    transform: translateY(100%);
     opacity: 0;
   }
 }
-@utility animate-pulse-ring {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: pulse-ring 2.2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+@utility animate-beam {
+  animation: beam 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+@keyframes phase-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@utility animate-phase-progress {
+  animation: phase-progress linear both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
-  .animate-scan,
-  .animate-pulse-ring {
+  .animate-mark-scan {
     animation: none;
+  }
+  .animate-beam {
+    animation: none;
+    opacity: 0;
   }
 }

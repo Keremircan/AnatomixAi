@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building, Check, Eye, EyeOff, LoaderCircle, Lock, Mail, ShieldCheck, Stethoscope, User, UserRound, type LucideIcon } from "lucide-react";
-import { AnatomyBackdrop } from "./AnatomyBackdrop";
+import { HologramStage } from "./HologramStage";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { AuthError, PROFESSIONS, signIn, signUp, SPECIALTIES, type Profession, type UserRole } from "@/lib/auth";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,19 @@ function Field({ id, label, icon: Icon, hint, children }: { id: string; label: s
 const inputCls =
   "h-11 w-full rounded-xl border border-line bg-surface-2/70 pr-3 pl-10 text-sm placeholder:text-muted/70 focus:border-accent focus:ring-4 focus:ring-accent/15 focus:outline-none";
 
-function Consent({ id, checked, onChange, children, emphasis = false }: { id: string; checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode; emphasis?: boolean }) {
+function Consent({
+  id,
+  checked,
+  onChange,
+  children,
+  emphasis = false,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+  emphasis?: boolean;
+}) {
   return (
     <label
       htmlFor={id}
@@ -154,69 +167,56 @@ export function AuthScreen() {
   }
 
   return (
-    <main className="grid flex-1 place-items-center p-3 sm:p-6">
-      <div className="grid w-full max-w-6xl gap-4 lg:grid-cols-[1.05fr_1fr]">
-        {/* Sol: marka ve silüet */}
-        <section className="glass relative hidden overflow-hidden rounded-card p-10 lg:flex lg:flex-col">
-          <div
-            aria-hidden
-            className="absolute inset-0 opacity-60"
-            style={{
-              backgroundImage: "radial-gradient(color-mix(in oklab, var(--muted) 30%, transparent) 1px, transparent 1px)",
-              backgroundSize: "18px 18px",
-              maskImage: "radial-gradient(ellipse at 50% 55%, #000 30%, transparent 75%)",
-            }}
-          />
-          <div aria-hidden className="absolute top-1/2 left-1/2 size-[420px] -translate-1/2 rounded-full bg-accent/10 blur-3xl" />
-          <div className="relative max-w-md">
-            <span className="inline-flex items-center gap-2 rounded-full border border-accent/35 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-              <ShieldCheck className="size-3.5" aria-hidden />
-              Klinik ön triyaj · poliklinik yönlendirme
-            </span>
-            <h1 className="mt-5 text-4xl leading-[1.08] font-semibold tracking-[-0.03em]">Şikayetinizi gösterin. Nereye başvuracağınızı öğrenin.</h1>
-            <p className="mt-4 text-[15px] leading-relaxed text-muted">
-              Semptomunuzu yazın ya da 3B model üzerinde işaretleyin. ANATOMIX.AI aciliyet seviyesini ve ilgili polikliniği önerir; tanı koymaz.
-            </p>
-          </div>
-          <div className="relative mt-6 min-h-[300px] flex-1">
-            <AnatomyBackdrop />
-            <div className="glass absolute top-8 left-0 rounded-xl px-3.5 py-2.5 text-xs shadow-elev animate-rise">
-              <div className="text-muted">Triyaj</div>
-              <div className="mt-0.5 flex items-center gap-2 font-medium">
-                <span className="size-2 rounded-full bg-accent" />
-                T3 · Rutin poliklinik
-              </div>
-            </div>
-            <div className="glass absolute top-32 right-0 rounded-xl px-3.5 py-2.5 text-xs shadow-elev animate-rise">
-              <div className="text-muted">Önerilen branş</div>
-              <div className="mt-0.5 font-medium">Ortopedi ve Travmatoloji</div>
-            </div>
-            <div className="glass absolute bottom-4 left-6 rounded-xl px-3.5 py-2.5 text-xs shadow-elev animate-rise">
-              <div className="text-muted">Kırmızı bayrak kontrolü</div>
-              <div className="mt-0.5 flex items-center gap-1.5 font-medium">
-                <ShieldCheck className="size-3.5 text-success" aria-hidden />
-                Yapay zekadan önce ve sonra
-              </div>
-            </div>
-          </div>
-          <dl className="relative mt-6 grid grid-cols-3 gap-4 border-t border-line pt-5 text-sm">
-            <div>
-              <dt className="text-xs text-muted">Triyaj seviyesi</dt>
-              <dd className="mt-1 font-semibold">4 seviye</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Anatomik sistem</dt>
-              <dd className="mt-1 font-semibold">12 katman</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Veri bölgesi</dt>
-              <dd className="mt-1 font-semibold">AB · KVKK</dd>
-            </div>
-          </dl>
-        </section>
+    <main className="grid flex-1 lg:h-[calc(100dvh-4rem)] lg:flex-none lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:overflow-hidden">
+      {/* Sol: hologram ve marka mesajı (her temada koyu "ekran" yüzeyi) */}
+      <section className="dark relative hidden min-h-0 flex-col overflow-hidden border-r border-line bg-[#03070d] text-foreground lg:flex">
+        <div aria-hidden className="absolute -top-40 -left-24 size-[520px] rounded-full bg-accent/10 blur-3xl" />
+        <div className="relative px-10 pt-9 xl:px-14 short:pt-6">
+          <span className="inline-flex items-center gap-2 rounded-full border border-accent/35 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+            <ShieldCheck className="size-3.5" aria-hidden />
+            Klinik ön triyaj · poliklinik yönlendirme
+          </span>
+          <h1 className="mt-4 max-w-lg text-[34px] leading-[1.08] font-semibold tracking-[-0.03em] xl:text-[40px] short:mt-3 short:text-[30px]">
+            Şikayetinizi gösterin. <span className="text-accent">Nereye başvuracağınızı</span> öğrenin.
+          </h1>
+          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted short:hidden">
+            Semptomunuzu yazın ya da 3B model üzerinde işaretleyin. ANATOMIX.AI aciliyet seviyesini ve ilgili polikliniği önerir; tanı koymaz.
+          </p>
+        </div>
 
-        {/* Sağ: form */}
-        <section className="glass rounded-card p-5 sm:p-8" aria-labelledby={`${uid}-title`}>
+        <HologramStage className="mx-6 my-3 min-h-0 flex-1 xl:mx-10" />
+
+        <dl className="relative mx-10 grid grid-cols-3 gap-4 border-t border-line py-5 text-sm xl:mx-14 short:py-3">
+          <div>
+            <dt className="text-xs text-muted">Triyaj seviyesi</dt>
+            <dd className="mt-1 font-semibold">4 seviye</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">Anatomik sistem</dt>
+            <dd className="mt-1 font-semibold">12 katman</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">Veri bölgesi</dt>
+            <dd className="mt-1 font-semibold">AB · KVKK</dd>
+          </div>
+        </dl>
+      </section>
+
+      {/* Sağ: form. Kısa ekranda yalnızca bu kolon kendi içinde kayar; sayfa kaymaz. */}
+      <section className="relative flex min-h-0 flex-col overflow-y-auto px-4 py-6 sm:px-8 lg:px-10" aria-labelledby={`${uid}-title`}>
+        <div className="m-auto w-full max-w-[440px] py-2 short:py-0">
+          <div className="mb-7 flex flex-col gap-4 short:mb-4 short:gap-3">
+            <BrandLogo size="lg" scanning />
+            <div>
+              <h2 id={`${uid}-title`} className="text-2xl font-semibold tracking-tight">
+                {register ? "Hesabınızı oluşturun" : "Tekrar hoş geldiniz"}
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {register ? "Portalınızı seçin, birkaç bilgiyle hemen başlayın." : "Portalınızı seçin ve hesabınıza giriş yapın."}
+              </p>
+            </div>
+          </div>
+
           <div role="radiogroup" aria-label="Portal" className="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-surface-2/60 p-1">
             {ROLES.map(({ id, label, desc, Icon }) => {
               const on = role === id;
@@ -227,19 +227,19 @@ export function AuthScreen() {
                   role="radio"
                   aria-checked={on}
                   onClick={() => setRole(id)}
-                  className={cn("rounded-xl px-3 py-3 text-left transition", on ? "bg-surface shadow-sm ring-1 ring-accent/45" : "hover:bg-surface/50")}
+                  className={cn("rounded-xl px-3 py-3 text-left transition short:py-2", on ? "bg-surface shadow-sm ring-1 ring-accent/45" : "hover:bg-surface/50")}
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
                     <Icon className={cn("size-4", on ? "text-accent" : "text-muted")} aria-hidden />
                     {label}
                   </span>
-                  <span className="mt-1 block text-[11px] leading-snug text-muted">{desc}</span>
+                  <span className={cn("mt-1 block text-[11px] leading-snug text-muted short:hidden", register && "hidden")}>{desc}</span>
                 </button>
               );
             })}
           </div>
 
-          <div role="tablist" aria-label="Oturum" className="relative mt-6 grid grid-cols-2 border-b border-line">
+          <div role="tablist" aria-label="Oturum" className="relative mt-5 grid grid-cols-2 border-b border-line short:mt-3">
             {(["login", "register"] as const).map((m) => (
               <button
                 key={m}
@@ -270,30 +270,37 @@ export function AuthScreen() {
             aria-labelledby={`${uid}-tab-${mode}`}
             onSubmit={onSubmit}
             noValidate
-            className="mt-5 grid gap-4"
+            className="mt-5 grid gap-4 short:mt-4 short:gap-3"
           >
-            <h2 id={`${uid}-title`} className="sr-only">
-              {register ? "Hesap oluştur" : "Giriş yap"}
-            </h2>
+            {/* Kayıtta ad ve e-posta yan yana: form kısa ekranlarda da kaydırmasız sığsın */}
+            <div className={cn("grid gap-4 short:gap-3", register && "sm:grid-cols-2")}>
+              {register && (
+                <Field id={`${uid}-name`} label="Ad Soyad" icon={User}>
+                  <input
+                    id={`${uid}-name`}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    autoComplete="name"
+                    required
+                    className={inputCls}
+                    placeholder="Ayşe Yılmaz"
+                  />
+                </Field>
+              )}
 
-            {register && (
-              <Field id={`${uid}-name`} label="Ad Soyad" icon={User}>
-                <input id={`${uid}-name`} value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" required className={inputCls} placeholder="Ayşe Yılmaz" />
+              <Field id={`${uid}-email`} label="E-posta" icon={Mail}>
+                <input
+                  id={`${uid}-email`}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                  className={inputCls}
+                  placeholder="ornek@eposta.com"
+                />
               </Field>
-            )}
-
-            <Field id={`${uid}-email`} label="E-posta" icon={Mail}>
-              <input
-                id={`${uid}-email`}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-                className={inputCls}
-                placeholder="ornek@eposta.com"
-              />
-            </Field>
+            </div>
 
             <div className="grid gap-1.5">
               <Field id={`${uid}-pw`} label="Şifre" icon={Lock}>
@@ -330,9 +337,9 @@ export function AuthScreen() {
             </div>
 
             {register && role === "clinician" && (
-              <div className="grid gap-3 rounded-xl border border-dashed border-accent/40 bg-accent/5 p-4 animate-rise">
+              <div className="grid gap-3 rounded-xl border border-dashed border-accent/40 bg-accent/5 p-4 animate-rise short:p-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
+                  <div className="grid min-w-0 gap-1.5">
                     <label htmlFor={`${uid}-prof`} className="text-[13px] font-medium">
                       Meslek
                     </label>
@@ -344,7 +351,7 @@ export function AuthScreen() {
                         setProfession(p);
                         setSpecialty(SPECIALTIES[p][0]);
                       }}
-                      className="h-11 rounded-xl border border-line bg-surface-2 px-3 text-sm focus:border-accent focus:outline-none"
+                      className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-3 text-sm focus:border-accent focus:outline-none"
                     >
                       {PROFESSIONS.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -353,7 +360,7 @@ export function AuthScreen() {
                       ))}
                     </select>
                   </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid min-w-0 gap-1.5">
                     <label htmlFor={`${uid}-spec`} className="text-[13px] font-medium">
                       Uzmanlık alanı / Branş
                     </label>
@@ -361,7 +368,7 @@ export function AuthScreen() {
                       id={`${uid}-spec`}
                       value={specialty}
                       onChange={(e) => setSpecialty(e.target.value)}
-                      className="h-11 rounded-xl border border-line bg-surface-2 px-3 text-sm focus:border-accent focus:outline-none"
+                      className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-3 text-sm focus:border-accent focus:outline-none"
                     >
                       {SPECIALTIES[profession].map((s) => (
                         <option key={s}>{s}</option>
@@ -370,7 +377,13 @@ export function AuthScreen() {
                   </div>
                 </div>
                 <Field id={`${uid}-inst`} label="Kurum / Diploma No" hint="(opsiyonel)" icon={Building}>
-                  <input id={`${uid}-inst`} value={institution} onChange={(e) => setInstitution(e.target.value)} className={inputCls} placeholder="Ör. Ankara Şehir Hastanesi veya diploma no" />
+                  <input
+                    id={`${uid}-inst`}
+                    value={institution}
+                    onChange={(e) => setInstitution(e.target.value)}
+                    className={inputCls}
+                    placeholder="Ör. Ankara Şehir Hastanesi veya diploma no"
+                  />
                 </Field>
                 <p className="text-[11px] leading-snug text-muted">
                   Hesabınız mesleki belgeniz yönetici tarafından doğrulanana kadar “doğrulama bekliyor” durumunda kalır.
@@ -412,7 +425,7 @@ export function AuthScreen() {
             {!accepted && <p className="-mt-2 text-center text-[11px] text-muted">Devam etmek için sorumluluk reddini onaylayın.</p>}
           </form>
 
-          <p className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted">
+          <p className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted short:mt-4">
             <span className="flex items-center gap-1">
               <Lock className="size-3" aria-hidden />
               Şifreli oturum
@@ -420,8 +433,8 @@ export function AuthScreen() {
             <span>Veriler AB bölgesinde</span>
             <span>KVKK · GDPR</span>
           </p>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }

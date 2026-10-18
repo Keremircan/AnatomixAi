@@ -7,6 +7,9 @@
 
 export type UserRole = "patient" | "clinician";
 export type Profession = "physician" | "physiotherapist" | "nurse";
+/** localStorage anahtarı: yalnızca son oturumun rol türü (kişisel veri değil). F5'te Navbar iskeletinin genişliğini belirler. */
+export const ROLE_HINT_KEY = "anatomix-role-hint";
+
 export type VerificationStatus = "not_required" | "pending" | "verified" | "rejected";
 
 export interface UserProfile {

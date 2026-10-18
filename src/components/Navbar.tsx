@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSignOut } from "@/hooks/useSignOut";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Clock, LoaderCircle, LogIn, LogOut, Scale, Stethoscope, UserRound, X } from "lucide-react";
 import { displayName, PROFESSIONS, type UserProfile } from "@/lib/auth";
 import { useAnatomyStore, type UserRole } from "@/store/useAnatomyStore";
@@ -20,10 +21,10 @@ export function Navbar() {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   return (
-    <header className="glass sticky top-0 z-40 border-x-0 border-t-0">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
+    <header className="glass sticky top-0 z-40 h-16 border-x-0 border-t-0">
+      <div className="mx-auto flex h-full max-w-[1440px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
         <Link href="/" aria-label="ANATOMIX.AI ana sayfa" className="rounded-xl">
-          <Logo />
+          <BrandLogo beta textClassName="hidden sm:flex" />
         </Link>
 
         <div className="flex-1" />
@@ -40,12 +41,10 @@ export function Navbar() {
 
         <ThemeToggle />
 
+        {/* Proxy, /login dışındaki her sayfayı oturum ister; bu yüzden oturum bilgisi gelene kadar giriş ekranı dışında
+            gerçek menüyle aynı ölçülerdeki iskelet gösterilir, giriş ekranında ise hiçbir şey (F5'te düzen kaymaz). */}
         {!authReady ? (
-          // Oturum kontrolü sürerken yer tutucu (düzen kaymasın)
-          <div className="flex items-center gap-2 border-l border-line pl-3" aria-hidden>
-            <span className="size-9 animate-pulse rounded-full bg-surface-2" />
-            <span className="hidden h-8 w-36 animate-pulse rounded-lg bg-surface-2 md:block" />
-          </div>
+          pathname !== "/login" && <UserMenuSkeleton />
         ) : isAuthenticated && user ? (
           <UserMenu user={user} />
         ) : (
@@ -71,6 +70,62 @@ const ROLE_BADGE: Record<UserRole, { label: string; Icon: typeof UserRound; cls:
   clinician: { label: "Sağlık Profesyoneli", Icon: Stethoscope, cls: "border-teal/35 bg-teal/10 text-teal" },
 };
 
+/**
+ * Rol rozeti. `ghost` iskelet sürümüdür: aynı metni saydam çizer, böylece genişliği gerçek rozetle birebir aynıdır.
+ * Hangi iskeletin görüneceğini <html data-anx-role> belirler (layout'taki satır içi betik, boyamadan önce).
+ */
+function RoleBadge({ role, pending, rejected, ghost, title }: { role: UserRole; pending: boolean; rejected: boolean; ghost?: boolean; title?: string }) {
+  const badge = ROLE_BADGE[role];
+  return (
+    <span
+      data-role-hint={ghost ? (pending ? (rejected ? "clinician-rejected" : "clinician-pending") : role) : undefined}
+      className={cn(
+        "shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
+        ghost ? "role-hint animate-pulse border-line bg-surface-2 text-transparent" : cn("hidden sm:flex", badge.cls),
+      )}
+      title={title}
+    >
+      <badge.Icon className="size-3.5" aria-hidden />
+      {badge.label}
+      {pending && (
+        <span
+          className={cn("ml-0.5 flex items-center gap-1 rounded-full px-1.5", !ghost && (rejected ? "bg-danger/15 text-danger" : "bg-caution/15 text-caution"))}
+          title={ghost ? undefined : rejected ? "Mesleki belge doğrulaması reddedildi" : "Mesleki belge doğrulaması bekleniyor"}
+        >
+          <Clock className="size-3" aria-hidden />
+          <span className="hidden xl:inline">{rejected ? "doğrulama reddedildi" : "doğrulama bekliyor"}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+const menuCls = "flex shrink-0 items-center gap-2 border-l border-line pl-2 sm:gap-3 sm:pl-3";
+const signOutCls = "flex h-9 items-center gap-1.5 rounded-xl border border-line px-2.5 text-[13px]";
+
+/** Oturum bilgisi gelene kadar UserMenu ile aynı ölçülerde yer tutucu. */
+function UserMenuSkeleton() {
+  return (
+    <div className={menuCls} aria-hidden>
+      <span className="flex items-center gap-2.5 p-1 pr-2">
+        <span className="size-9 animate-pulse rounded-full bg-surface-2" />
+        <span className="hidden w-44 gap-1.5 md:grid">
+          <span className="h-3 w-28 animate-pulse rounded bg-surface-2" />
+          <span className="h-2.5 w-40 animate-pulse rounded bg-surface-2" />
+        </span>
+      </span>
+      <RoleBadge ghost role="patient" pending={false} rejected={false} />
+      <RoleBadge ghost role="clinician" pending={false} rejected={false} />
+      <RoleBadge ghost role="clinician" pending rejected={false} />
+      <RoleBadge ghost role="clinician" pending rejected />
+      <span className={cn(signOutCls, "animate-pulse bg-surface-2 text-transparent")}>
+        <LogOut className="size-4" aria-hidden />
+        <span className="hidden xl:inline">Çıkış Yap</span>
+      </span>
+    </div>
+  );
+}
+
 /** Oturum açık kullanıcının profil bilgisi, salt okunur rol rozeti ve çıkış düğmesi. */
 function UserMenu({ user }: { user: UserProfile }) {
   const { signOut, leaving } = useSignOut();
@@ -82,7 +137,7 @@ function UserMenu({ user }: { user: UserProfile }) {
   const rejected = user.verificationStatus === "rejected";
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-l border-line pl-2 sm:gap-3 sm:pl-3">
+    <div className={menuCls}>
       {/* Avatar ve ad: profil sayfasına bağlantı */}
       <Link
         href="/profile"
@@ -91,61 +146,24 @@ function UserMenu({ user }: { user: UserProfile }) {
         className={cn("flex min-w-0 items-center gap-2.5 rounded-xl p-1 pr-2 transition hover:bg-surface-2", onProfile && "bg-surface-2 ring-1 ring-accent/30")}
       >
         <UserAvatar user={user} size={36} className="rounded-full" textClassName="text-xs" />
-        <span className="hidden min-w-0 leading-tight md:block">
-          <span className="block max-w-48 truncate text-[13px] font-medium">{displayName(user)}</span>
-          <span className="block max-w-48 truncate text-[11px] text-muted">{user.email}</span>
+        <span className="hidden w-44 min-w-0 leading-tight md:block">
+          <span className="block truncate text-[13px] font-medium">{displayName(user)}</span>
+          <span className="block truncate text-[11px] text-muted">{user.email}</span>
         </span>
         <span className="sr-only md:hidden">Profilim</span>
       </Link>
-      <span
-        className={cn("hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:flex", badge.cls)}
-        title={[badge.label, profession, user.specialty].filter(Boolean).join(" · ")}
-      >
-        <badge.Icon className="size-3.5" aria-hidden />
-        {badge.label}
-        {pending && (
-          <span
-            className={cn("ml-0.5 flex items-center gap-1 rounded-full px-1.5", rejected ? "bg-danger/15 text-danger" : "bg-caution/15 text-caution")}
-            title={rejected ? "Mesleki belge doğrulaması reddedildi" : "Mesleki belge doğrulaması bekleniyor"}
-          >
-            <Clock className="size-3" aria-hidden />
-            <span className="hidden xl:inline">{rejected ? "doğrulama reddedildi" : "doğrulama bekliyor"}</span>
-          </span>
-        )}
-      </span>
+      <RoleBadge role={user.role} pending={pending} rejected={rejected} title={[badge.label, profession, user.specialty].filter(Boolean).join(" · ")} />
       <button
         type="button"
         onClick={signOut}
         disabled={leaving}
         aria-label="Çıkış yap"
         title="Çıkış yap"
-        className="flex h-9 items-center gap-1.5 rounded-xl border border-line px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+        className={cn(signOutCls, "text-muted transition hover:bg-surface-2 hover:text-foreground disabled:opacity-60")}
       >
         {leaving ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <LogOut className="size-4" aria-hidden />}
         <span className="hidden xl:inline">Çıkış Yap</span>
       </button>
-    </div>
-  );
-}
-
-function Logo() {
-  return (
-    <div className="flex shrink-0 items-center gap-2.5">
-      <span className="relative grid size-9 place-items-center rounded-[11px] border border-accent/30 bg-accent/10 text-accent">
-        <svg viewBox="0 0 32 32" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-          <circle cx="16" cy="7" r="3.2" />
-          <path d="M16 11v12M10 14.5l6 2 6-2M12 28l4-5 4 5" />
-        </svg>
-        <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-accent shadow-[0_0_10px_var(--accent)] ring-2 ring-background" />
-      </span>
-      <span className="hidden items-center gap-2 sm:flex">
-        <span className="text-[15px] font-semibold tracking-tight">
-          ANATOMIX<span className="text-accent">.AI</span>
-        </span>
-        <span className="rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[10px] tracking-wider text-muted">
-          BETA
-        </span>
-      </span>
     </div>
   );
 }
