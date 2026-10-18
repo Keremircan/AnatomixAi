@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Navbar } from "@/components/Navbar";
-import { SessionHydrator } from "@/components/SessionHydrator";
+import { AuthListener } from "@/components/AuthListener";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -21,12 +22,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="tr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="tr" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
-        <div className="app-backdrop" aria-hidden />
-        <SessionHydrator />
-        <Navbar />
-        {children}
+        <ThemeProvider>
+          <div className="app-backdrop" aria-hidden />
+          <AuthListener />
+          <Navbar />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building, Check, Eye, EyeOff, LoaderCircle, Lock, Mail, ShieldCheck, Stethoscope, User, UserRound, type LucideIcon } from "lucide-react";
 import { AnatomyBackdrop } from "./AnatomyBackdrop";
@@ -109,10 +109,17 @@ export function AuthScreen() {
     };
   }, []);
 
-  // Oturum zaten açıksa çalışma alanına dön.
+  /** Girişten sonra korunan sayfaya (?next=) ya da ana sayfaya dön; proxy yeni çerezleri görsün diye yenilenir. */
+  const goNext = useCallback(() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
+    router.refresh();
+  }, [router]);
+
+  // Oturum zaten açıksa (ör. başka sekmede giriş yapıldıysa) çalışma alanına dön.
   useEffect(() => {
-    if (isAuthenticated && !submitting) router.replace("/");
-  }, [isAuthenticated, submitting, router]);
+    if (isAuthenticated && !submitting) goNext();
+  }, [isAuthenticated, submitting, goNext]);
 
   const register = mode === "register";
   const strength = passwordStrength(password);
@@ -124,17 +131,22 @@ export function AuthScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      const profile = register
-        ? await signUp({
+      if (register) {
+        // Sunucu hesabı oluşturur ve oturum çerezini yazar.
+        login(
+          await signUp({
             email,
             password,
             role,
             fullName: fullName.trim(),
             ...(role === "clinician" ? { profession, specialty, institution: institution.trim() || undefined } : {}),
-          })
-        : await signIn({ email, password, role });
-      login(profile);
-      router.push("/");
+            consents: { medicalDisclaimer: accepted, healthData: kvkk, adult },
+          }),
+        );
+      } else {
+        login(await signIn({ email, password, role }));
+      }
+      goNext();
     } catch (err) {
       setError(err instanceof AuthError ? err.message : "Bir sorun oluştu. Lütfen tekrar deneyin.");
       setSubmitting(false);
@@ -168,18 +180,18 @@ export function AuthScreen() {
           </div>
           <div className="relative mt-6 min-h-[300px] flex-1">
             <AnatomyBackdrop />
-            <div className="glass absolute top-8 left-0 rounded-xl px-3.5 py-2.5 text-xs shadow-lg animate-rise">
+            <div className="glass absolute top-8 left-0 rounded-xl px-3.5 py-2.5 text-xs shadow-elev animate-rise">
               <div className="text-muted">Triyaj</div>
               <div className="mt-0.5 flex items-center gap-2 font-medium">
                 <span className="size-2 rounded-full bg-accent" />
                 T3 · Rutin poliklinik
               </div>
             </div>
-            <div className="glass absolute top-32 right-0 rounded-xl px-3.5 py-2.5 text-xs shadow-lg animate-rise">
+            <div className="glass absolute top-32 right-0 rounded-xl px-3.5 py-2.5 text-xs shadow-elev animate-rise">
               <div className="text-muted">Önerilen branş</div>
               <div className="mt-0.5 font-medium">Ortopedi ve Travmatoloji</div>
             </div>
-            <div className="glass absolute bottom-4 left-6 rounded-xl px-3.5 py-2.5 text-xs shadow-lg animate-rise">
+            <div className="glass absolute bottom-4 left-6 rounded-xl px-3.5 py-2.5 text-xs shadow-elev animate-rise">
               <div className="text-muted">Kırmızı bayrak kontrolü</div>
               <div className="mt-0.5 flex items-center gap-1.5 font-medium">
                 <ShieldCheck className="size-3.5 text-success" aria-hidden />

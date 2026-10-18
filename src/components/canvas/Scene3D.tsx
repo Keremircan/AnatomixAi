@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useProgress } from "@react-three/drei";
+import { useTheme } from "next-themes";
 import { Box3, CanvasTexture, type Group, MathUtils, type Object3D, Sphere, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { AnatomyModel, meshName, preloadDefaultLayers } from "./AnatomyModel";
@@ -10,6 +11,17 @@ import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { BODY, FIGURE_SPACING, figureOffsets, LAYER_IDS, layerDef, pickLod } from "@/lib/layers";
 
 const ACCENT = "#22d3ee";
+
+/**
+ * Temaya göre sahne ışığı ve zemin ayarları. Koyu temada derin zemin + cyan kenar ışığı;
+ * açık temada klinik açık gri zeminde modelin kontur kazanması için daha yumuşak dolgu ve
+ * daha koyu bir cyan zemin halkası kullanılır.
+ */
+const SCENE_THEME = {
+  dark: { sky: "#e6f4ff", ground: "#1a2533", hemi: 0.9, ambient: 0.35, key: 1.6, rim: 0.9, rimColor: ACCENT, back: 0.4, ring: ACCENT, ringOpacity: 0.35, shadow: 0.65 },
+  light: { sky: "#ffffff", ground: "#b8c4d2", hemi: 1.0, ambient: 0.45, key: 1.5, rim: 0.55, rimColor: "#0e7490", back: 0.5, ring: "#0e7490", ringOpacity: 0.45, shadow: 0.32 },
+} as const;
+type SceneTheme = (typeof SCENE_THEME)[keyof typeof SCENE_THEME];
 const TWEEN_MS = 700;
 /** Sol sistem panelinin genişliği + kenar boşluğu (md ve üstü). */
 const PANEL_INSET_PX = 300;
@@ -123,37 +135,37 @@ function focusTween(mesh: Object3D, minRadius: number, fov: number, camPos: Vect
 }
 
 /** Yumuşak zemin gölgesi dokusu (ContactShadows yerine; figürlerle birlikte kayar, ek render geçişi gerektirmez). */
-function useShadowTexture() {
+function useShadowTexture(strength: number) {
   return useMemo(() => {
     const c = document.createElement("canvas");
     c.width = c.height = 128;
     const g = c.getContext("2d")!;
     const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    grad.addColorStop(0, "rgba(0,0,0,0.65)");
+    grad.addColorStop(0, `rgba(15,23,42,${strength})`);
     grad.addColorStop(1, "rgba(0,0,0,0)");
     g.fillStyle = grad;
     g.fillRect(0, 0, 128, 128);
     return new CanvasTexture(c);
-  }, []);
+  }, [strength]);
 }
 
 /** Her figürün altındaki zemin halkası ve gölge. */
-function FloorMarks() {
+function FloorMarks({ theme }: { theme: SceneTheme }) {
   const visible = useVisibleOrdered();
   const mode = useAnatomyStore((s) => s.viewMode);
-  const shadow = useShadowTexture();
+  const shadow = useShadowTexture(theme.shadow);
   const offsets = figureOffsets(visible, mode);
-  if (mode === "stacked" || visible.length === 0) return <FloorMark x={0} shadow={shadow} />;
+  if (mode === "stacked" || visible.length === 0) return <FloorMark x={0} shadow={shadow} theme={theme} />;
   return (
     <>
       {visible.map((id) => (
-        <FloorMark key={id} x={offsets.get(id)!} shadow={shadow} />
+        <FloorMark key={id} x={offsets.get(id)!} shadow={shadow} theme={theme} />
       ))}
     </>
   );
 }
 
-function FloorMark({ x, shadow }: { x: number; shadow: CanvasTexture }) {
+function FloorMark({ x, shadow, theme }: { x: number; shadow: CanvasTexture; theme: SceneTheme }) {
   const ref = useRef<Group>(null);
   useFrame((_, d) => {
     if (ref.current) ref.current.position.x = MathUtils.damp(ref.current.position.x, x, 7, d);
@@ -166,7 +178,7 @@ function FloorMark({ x, shadow }: { x: number; shadow: CanvasTexture }) {
       </mesh>
       <mesh>
         <ringGeometry args={[0.33, 0.334, 96]} />
-        <meshBasicMaterial color={ACCENT} transparent opacity={0.35} />
+        <meshBasicMaterial color={theme.ring} transparent opacity={theme.ringOpacity} />
       </mesh>
     </group>
   );
@@ -222,6 +234,8 @@ export default function Scene3D() {
   const mode = useAnatomyStore((s) => s.viewMode);
   const visible = useVisibleOrdered();
   const labels = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
+  const theme = SCENE_THEME[resolvedTheme === "light" ? "light" : "dark"];
 
   return (
     <>
@@ -232,16 +246,16 @@ export default function Scene3D() {
         onPointerMissed={() => clearSelection(null)}
       >
         {/* Yumuşak stüdyo ışığı + cyan kenar ışığı */}
-        <hemisphereLight args={["#e6f4ff", "#1a2533", 0.9]} />
-        <ambientLight intensity={0.35} />
-        <directionalLight position={[2.5, 4, 3]} intensity={1.6} />
-        <directionalLight position={[-3, 2, -2.5]} intensity={0.9} color={ACCENT} />
-        <directionalLight position={[0, 1, -4]} intensity={0.4} />
+        <hemisphereLight args={[theme.sky, theme.ground, theme.hemi]} />
+        <ambientLight intensity={theme.ambient} />
+        <directionalLight position={[2.5, 4, 3]} intensity={theme.key} />
+        <directionalLight position={[-3, 2, -2.5]} intensity={theme.rim} color={theme.rimColor} />
+        <directionalLight position={[0, 1, -4]} intensity={theme.back} />
 
         <Suspense fallback={null}>
           <AnatomyModel lod={lod} />
         </Suspense>
-        <FloorMarks />
+        <FloorMarks theme={theme} />
 
         <OrbitControls
           makeDefault

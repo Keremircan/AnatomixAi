@@ -2,22 +2,19 @@
 
 import { useRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Clock, LogIn, LogOut, Scale, Stethoscope, UserRound, X } from "lucide-react";
-import { displayName, roleLabel, type UserProfile } from "@/lib/auth";
+import { usePathname } from "next/navigation";
+import { useSignOut } from "@/hooks/useSignOut";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Clock, LoaderCircle, LogIn, LogOut, Scale, Stethoscope, UserRound, X } from "lucide-react";
+import { displayName, PROFESSIONS, type UserProfile } from "@/lib/auth";
 import { useAnatomyStore, type UserRole } from "@/store/useAnatomyStore";
 import { cn } from "@/lib/utils";
 
-const ROLES: { id: UserRole; label: string; short: string; Icon: typeof UserRound }[] = [
-  { id: "patient", label: "Hasta", short: "Hasta", Icon: UserRound },
-  { id: "clinician", label: "Sağlık Profesyoneli", short: "Uzman", Icon: Stethoscope },
-];
-
 export function Navbar() {
   const role = useAnatomyStore((s) => s.role);
-  const setRole = useAnatomyStore((s) => s.setRole);
   const user = useAnatomyStore((s) => s.user);
   const isAuthenticated = useAnatomyStore((s) => s.isAuthenticated);
+  const authReady = useAnatomyStore((s) => s.authReady);
   const pathname = usePathname();
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -28,33 +25,7 @@ export function Navbar() {
           <Logo />
         </Link>
 
-        <div className="flex flex-1 justify-end sm:justify-center">
-          {/* Misafir kullanımda portal görünümü demo amaçlı değiştirilebilir; oturum açıkken hesabın rolü geçerlidir. */}
-          {!isAuthenticated && pathname !== "/login" && (
-            <div role="radiogroup" aria-label="Görünüm rolü (misafir)" className="inline-flex rounded-xl border border-line bg-surface-2/80 p-1">
-              {ROLES.map(({ id, label, short, Icon }) => {
-                const active = role === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setRole(id)}
-                    className={cn(
-                      "flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap transition",
-                      active ? "bg-surface text-foreground shadow-sm ring-1 ring-accent/40" : "text-muted hover:text-foreground",
-                    )}
-                  >
-                    <Icon className={cn("size-4", active ? "text-accent" : "text-muted")} aria-hidden />
-                    <span className="hidden sm:inline">{label}</span>
-                    <span className="sm:hidden">{short}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <div className="flex-1" />
 
         <button
           type="button"
@@ -66,7 +37,15 @@ export function Navbar() {
           <span className="hidden lg:inline">Yasal Uyarı</span>
         </button>
 
-        {isAuthenticated && user ? (
+        <ThemeToggle />
+
+        {!authReady ? (
+          // Oturum kontrolü sürerken yer tutucu (düzen kaymasın)
+          <div className="flex items-center gap-2 border-l border-line pl-3" aria-hidden>
+            <span className="size-9 animate-pulse rounded-full bg-surface-2" />
+            <span className="hidden h-8 w-36 animate-pulse rounded-lg bg-surface-2 md:block" />
+          </div>
+        ) : isAuthenticated && user ? (
           <UserMenu user={user} />
         ) : (
           pathname !== "/login" && (
@@ -86,54 +65,70 @@ export function Navbar() {
   );
 }
 
-/** Oturum açık kullanıcının profil rozeti ve çıkış düğmesi. */
+const ROLE_BADGE: Record<UserRole, { label: string; Icon: typeof UserRound; cls: string }> = {
+  patient: { label: "Hasta", Icon: UserRound, cls: "border-accent/35 bg-accent/10 text-accent" },
+  clinician: { label: "Sağlık Profesyoneli", Icon: Stethoscope, cls: "border-teal/35 bg-teal/10 text-teal" },
+};
+
+/** Oturum açık kullanıcının profil bilgisi, salt okunur rol rozeti ve çıkış düğmesi. */
 function UserMenu({ user }: { user: UserProfile }) {
-  const logout = useAnatomyStore((s) => s.logout);
-  const router = useRouter();
-  const name = displayName(user);
+  const { signOut, leaving } = useSignOut();
+  const pathname = usePathname();
+  const onProfile = pathname === "/profile";
+  const badge = ROLE_BADGE[user.role];
+  const profession = PROFESSIONS.find((p) => p.id === user.profession)?.label;
+  const pending = user.role === "clinician" && !user.verified;
+  const rejected = user.verificationStatus === "rejected";
   const initials = (user.fullName || user.email)
     .split(/[\s@.]+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((w) => w[0]!.toLocaleUpperCase("tr-TR"))
     .join("");
-  const clinician = user.role === "clinician";
-  const pending = clinician && !user.verified;
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-l border-line pl-2 sm:pl-3">
-      <span
-        className={cn(
-          "grid size-9 place-items-center rounded-full text-xs font-semibold ring-1",
-          clinician ? "bg-teal/15 text-teal ring-teal/35" : "bg-accent/15 text-accent ring-accent/35",
-        )}
-        aria-hidden
+    <div className="flex shrink-0 items-center gap-2 border-l border-line pl-2 sm:gap-3 sm:pl-3">
+      {/* Avatar ve ad: profil sayfasına bağlantı */}
+      <Link
+        href="/profile"
+        aria-current={onProfile ? "page" : undefined}
+        title="Profilim"
+        className={cn("flex min-w-0 items-center gap-2.5 rounded-xl p-1 pr-2 transition hover:bg-surface-2", onProfile && "bg-surface-2 ring-1 ring-accent/30")}
       >
-        {initials}
+        <span className={cn("grid size-9 shrink-0 place-items-center rounded-full border text-xs font-semibold", badge.cls)} aria-hidden>
+          {initials}
+        </span>
+        <span className="hidden min-w-0 leading-tight md:block">
+          <span className="block max-w-48 truncate text-[13px] font-medium">{displayName(user)}</span>
+          <span className="block max-w-48 truncate text-[11px] text-muted">{user.email}</span>
+        </span>
+        <span className="sr-only md:hidden">Profilim</span>
+      </Link>
+      <span
+        className={cn("hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:flex", badge.cls)}
+        title={[badge.label, profession, user.specialty].filter(Boolean).join(" · ")}
+      >
+        <badge.Icon className="size-3.5" aria-hidden />
+        {badge.label}
+        {pending && (
+          <span
+            className={cn("ml-0.5 flex items-center gap-1 rounded-full px-1.5", rejected ? "bg-danger/15 text-danger" : "bg-caution/15 text-caution")}
+            title={rejected ? "Mesleki belge doğrulaması reddedildi" : "Mesleki belge doğrulaması bekleniyor"}
+          >
+            <Clock className="size-3" aria-hidden />
+            <span className="hidden xl:inline">{rejected ? "doğrulama reddedildi" : "doğrulama bekliyor"}</span>
+          </span>
+        )}
       </span>
-      <div className="hidden min-w-0 leading-tight md:block">
-        <div className="max-w-44 truncate text-[13px] font-medium">{name}</div>
-        <div className="flex items-center gap-1.5 text-[11px] text-muted">
-          <span className="max-w-40 truncate">{roleLabel(user)}</span>
-          {pending && (
-            <span className="flex shrink-0 items-center gap-1 rounded-full bg-caution/12 px-1.5 text-caution" title="Mesleki belge doğrulaması bekleniyor">
-              <Clock className="size-3" aria-hidden />
-              doğrulama
-            </span>
-          )}
-        </div>
-      </div>
       <button
         type="button"
-        onClick={() => {
-          logout();
-          router.push("/login");
-        }}
+        onClick={signOut}
+        disabled={leaving}
         aria-label="Çıkış yap"
         title="Çıkış yap"
-        className="flex h-9 items-center gap-1.5 rounded-xl border border-line px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-foreground"
+        className="flex h-9 items-center gap-1.5 rounded-xl border border-line px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
       >
-        <LogOut className="size-4" aria-hidden />
+        {leaving ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <LogOut className="size-4" aria-hidden />}
         <span className="hidden xl:inline">Çıkış Yap</span>
       </button>
     </div>

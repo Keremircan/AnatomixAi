@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Geliştirme sunucusunda sol altta çıkan Next.js göstergesini gizle (derleme/çalışma hataları yine gösterilir).
+  devIndicators: false,
   experimental: {
     agentFeedback: true,
   },

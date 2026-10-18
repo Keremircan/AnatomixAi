@@ -104,7 +104,7 @@ function StructureSearch() {
       />
       {error && <p className="mt-1.5 text-[11px] text-danger">Yapı listesi yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.</p>}
       {hits.length > 0 && (
-        <ul id={listId} role="listbox" className="glass absolute inset-x-0 top-full z-20 mt-1.5 max-h-72 overflow-y-auto rounded-xl p-1 shadow-2xl shadow-black/50">
+        <ul id={listId} role="listbox" className="glass absolute inset-x-0 top-full z-20 mt-1.5 max-h-72 overflow-y-auto rounded-xl p-1 shadow-elev">
           {hits.map((h, i) => (
             <li
               key={h.id}
@@ -152,7 +152,7 @@ export function LayerControls({ className }: { className?: string }) {
   const lod = useLod();
 
   return (
-    <nav aria-label="Anatomik sistemler" className={cn("glass rounded-2xl shadow-2xl shadow-black/40", className)}>
+    <nav aria-label="Anatomik sistemler" className={cn("glass rounded-2xl shadow-elev", className)}>
       {/* Dar ekran: yatay kaydırılan sistem çipleri */}
       <ul className="flex gap-1.5 p-1.5 md:hidden">
         {LAYERS.map((l) => {
@@ -249,7 +249,7 @@ export function ViewModeToggle({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex items-center gap-1.5", className)}>
-      <div role="radiogroup" aria-label="Görünüm modu" className="glass inline-flex rounded-xl p-1 shadow-xl shadow-black/30">
+      <div role="radiogroup" aria-label="Görünüm modu" className="glass inline-flex rounded-xl p-1 shadow-elev">
         {MODES.map(({ id, label, Icon }) => {
           const on = mode === id;
           return (
@@ -275,7 +275,7 @@ export function ViewModeToggle({ className }: { className?: string }) {
         onClick={reset}
         aria-label="Görünümü sıfırla"
         title="Görünümü sıfırla"
-        className="glass grid size-10 place-items-center rounded-xl text-muted shadow-xl shadow-black/30 transition hover:text-foreground"
+        className="glass grid size-10 place-items-center rounded-xl text-muted shadow-elev transition hover:text-foreground"
       >
         <RotateCcw className="size-4" aria-hidden />
       </button>

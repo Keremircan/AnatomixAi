@@ -13,7 +13,7 @@ export default function Home() {
     <main className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-3 sm:gap-4 sm:p-4 lg:h-[calc(100dvh-4rem-1px)] lg:flex-none lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
       <section
         aria-label="3B anatomi çalışma alanı"
-        className="relative h-[68svh] min-h-[460px] overflow-hidden rounded-card border border-line bg-[radial-gradient(60%_55%_at_50%_45%,color-mix(in_oklab,var(--accent)_12%,transparent),transparent_70%)] lg:h-auto lg:min-h-0"
+        className="relative h-[68svh] min-h-[460px] overflow-hidden rounded-card border border-line bg-[radial-gradient(60%_55%_at_50%_45%,var(--scene-glow),transparent_70%)] lg:h-auto lg:min-h-0"
       >
         <CanvasContainer />
 
