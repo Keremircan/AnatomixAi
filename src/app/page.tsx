@@ -1,8 +1,7 @@
 import { CanvasContainer } from "@/components/canvas/CanvasContainer";
 import { LayerControls, ViewModeToggle } from "@/components/LayerControls";
 import { SelectionBadge } from "@/components/SelectionBadge";
-import { SymptomPanel } from "@/components/SymptomPanel";
-import { AnalysisResultCard } from "@/components/AnalysisResultCard";
+import { TriageFlow } from "@/components/triage/TriageFlow";
 
 /**
  * Bölünmüş düzen: geniş ekranda solda 3B çalışma alanı, sağda kendi içinde kayan semptom/triyaj paneli;
@@ -13,7 +12,7 @@ export default function Home() {
     <main className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-3 sm:gap-4 sm:p-4 lg:h-[calc(100dvh-4rem-1px)] lg:flex-none lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
       <section
         aria-label="3B anatomi çalışma alanı"
-        className="@container relative h-[68svh] min-h-[460px] overflow-hidden rounded-card border border-line bg-[radial-gradient(60%_55%_at_50%_45%,var(--scene-glow),transparent_70%)] lg:h-auto lg:min-h-0"
+        className="@container relative h-[68svh] min-h-[460px] overflow-hidden rounded-card bg-[radial-gradient(60%_55%_at_50%_45%,var(--scene-glow),transparent_70%)] lg:h-auto lg:min-h-0"
       >
         <CanvasContainer />
 
@@ -33,9 +32,8 @@ export default function Home() {
         </div>
       </section>
 
-      <aside aria-label="Semptom ve triyaj" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 lg:overflow-y-auto lg:pr-1 lg:pb-2">
-        <SymptomPanel />
-        <AnalysisResultCard />
+      <aside aria-label="Şikayet ve triyaj" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 lg:overflow-y-auto lg:pr-1 lg:pb-2">
+        <TriageFlow />
       </aside>
     </main>
   );

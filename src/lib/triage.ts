@@ -5,6 +5,8 @@
  * Böylece bir metin hem acil hem rutin kalıba uyuyorsa her zaman daha acil seviye kazanır.
  */
 
+import { REGION_ORDER, REGIONS, regionHit, type RedFlagQuestion, type RegionBase, type RegionHit } from "./bodyRegions";
+
 export type TriageLevel = "critical" | "urgent" | "routine" | "self_care";
 
 export type Stretch = { name: string; dose: string; detail: string };
@@ -36,32 +38,36 @@ export type AnalysisResult = {
   ruleId: string;
 };
 
-/** Seviye başına sabit arayüz ve klinik eşdeğerlik bilgisi. */
+/**
+ * Seviye başına sabit arayüz ve klinik eşdeğerlik bilgisi.
+ * T1 Acil · T2 Öncelikli (bugün içinde) · T3 Poliklinik · T4 Evde izlem.
+ */
 export const TRIAGE_LEVELS: Record<
   TriageLevel,
-  { rank: 1 | 2 | 3 | 4; code: string; label: string; badge: string; action: string; esi: string; mts: string; mtsTarget: string }
+  { rank: 1 | 2 | 3 | 4; code: string; label: string; badge: string; timeframe: string; action: string; esi: string; mts: string; mtsTarget: string }
 > = {
   critical: {
-    rank: 1, code: "T1", label: "Kritik / Acil", badge: "Kırmızı bayrak · Acil",
+    rank: 1, code: "T1", label: "Acil", badge: "Kırmızı bayrak", timeframe: "Hemen",
     action: "Hemen 112’yi arayın veya en yakın acil servise gidin.",
     esi: "ESI 1–2", mts: "Kırmızı", mtsTarget: "Anında (0 dk)",
   },
   urgent: {
-    rank: 2, code: "T2", label: "Öncelikli / Yüksek risk", badge: "Öncelikli başvuru",
-    action: "En geç 24 saat içinde bir sağlık kuruluşuna veya acil servise başvurun.",
+    rank: 2, code: "T2", label: "Öncelikli", badge: "Bugün içinde", timeframe: "Bugün içinde (24 saat)",
+    action: "Beklemeyin: bugün içinde acil servise ya da aile hekiminize başvurun.",
     esi: "ESI 3", mts: "Sarı", mtsTarget: "≤ 60 dk",
   },
   routine: {
-    rank: 3, code: "T3", label: "Rutin poliklinik", badge: "Randevu alınması önerilir",
+    rank: 3, code: "T3", label: "Poliklinik", badge: "Randevu ile muayene", timeframe: "1–2 hafta içinde",
     action: "Önerilen poliklinikten randevu alarak muayene olun.",
     esi: "ESI 4", mts: "Yeşil", mtsTarget: "≤ 120 dk",
   },
   self_care: {
-    rank: 4, code: "T4", label: "Hafif / Evde bakım", badge: "Evde izlem",
+    rank: 4, code: "T4", label: "Evde izlem", badge: "Evde bakım", timeframe: "Şikayet 1 haftada geçmezse",
     action: "Evde izlem uygun görünüyor. Aşağıdaki belirtilerden biri olursa doktora başvurun.",
     esi: "ESI 5", mts: "Mavi", mtsTarget: "≤ 240 dk",
   },
 };
+export const LEVEL_BY_RANK: Record<1 | 2 | 3 | 4, TriageLevel> = { 1: "critical", 2: "urgent", 3: "routine", 4: "self_care" };
 
 const norm = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/\s+/g, " ").trim();
 
@@ -398,3 +404,255 @@ export const QUICK_TAGS: { label: string; text: string; level: TriageLevel; kind
   { label: "Dizimde batma var", text: "Dizimde eğilince batma var", level: "routine", kind: "Rutin test" },
   { label: "Boynum hafif tutuldu", text: "Masa başında çalışırken boynum hafif tutuldu", level: "self_care", kind: "Evde bakım testi" },
 ];
+
+/* ═════════════════════════ Çok adımlı akış: çıkarım → takip soruları → sonuç ═════════════════════════ */
+
+export type DurationBucket = "hours" | "days1_3" | "days4_7" | "weeks" | "months";
+export const DURATIONS: { id: DurationBucket; label: string }[] = [
+  { id: "hours", label: "Bugün başladı" },
+  { id: "days1_3", label: "1–3 gün" },
+  { id: "days4_7", label: "4–7 gün" },
+  { id: "weeks", label: "1–4 hafta" },
+  { id: "months", label: "1 aydan uzun" },
+];
+const DURATION_RANK: Record<DurationBucket, number> = { hours: 0, days1_3: 1, days4_7: 2, weeks: 3, months: 4 };
+
+export type Onset = "sudden" | "gradual";
+export type Course = "worse" | "same" | "better";
+
+export type SymptomHit = { name: string; code: string; expr: string };
+
+/** Metinden yapılandırılmış şikayet çıkarımı (Adım 2'de kullanıcıya gösterilir ve düzeltilebilir). */
+export type Extraction = {
+  regions: RegionHit[];
+  symptoms: SymptomHit[];
+  /** Metinden okunan süre ("4 gün"), kova karşılığıyla */
+  duration: { label: string; bucket: DurationBucket } | null;
+  onset: Onset | null;
+  course: Course | null;
+  fever: boolean;
+  /** Olumsuzluk, taraf belirsizliği gibi kullanıcıya gösterilen notlar */
+  notes: string[];
+};
+
+export type TriageAnswers = {
+  /** Ağrı / rahatsızlık şiddeti 0–10 */
+  severity: number | null;
+  duration: DurationBucket | null;
+  onset: Onset | null;
+  course: Course | null;
+  fever: boolean | null;
+  /** Birincil bölgenin kırmızı bayrak sorusu */
+  redFlag: boolean | null;
+};
+export const EMPTY_ANSWERS: TriageAnswers = { severity: null, duration: null, onset: null, course: null, fever: null, redFlag: null };
+
+/** Sonuç sayfasında gösterilen tam triyaj çıktısı. */
+export type TriageResult = AnalysisResult & {
+  regions: RegionHit[];
+  symptoms: SymptomHit[];
+  answers: TriageAnswers;
+  /** Seviyeyi belirleyen gerekçeler (en belirleyici önce) */
+  reasons: string[];
+  /** "Sağ diz bölgesinde 4–7 gündür süren ağrı …" */
+  summary: string;
+  /** Kural tabanının ilk önerdiği seviye (takip yanıtlarından önce) */
+  baseLevel: TriageLevel;
+};
+
+const SYMPTOMS: [string, RegExp, string][] = [
+  ["Ağrı", /ağrı|ağrıyor|sızı|sızl|batma|batıyor|zonkl/u, "SYM.pain"],
+  ["Şişlik", /şiş/u, "SYM.swelling"],
+  ["Yanma", /yanıyor|yanma/u, "SYM.burning"],
+  ["Ateş", /ateş/u, "SYM.fever"],
+  ["Tutulma", /tutul|tutuk/u, "SYM.stiffness"],
+  ["Baskı / sıkışma", /bask|sıkış/u, "SYM.pressure"],
+  ["Yutkunma güçlüğü", /yutkun/u, "SYM.dysphagia"],
+  ["Yayılan ağrı", /yayıl|vuruyor/u, "SYM.radiating"],
+  ["Uyuşma / karıncalanma", /uyuş|karınc/u, "SYM.numbness"],
+  ["Bulantı / kusma", /bulantı|bulan|kus/u, "SYM.nausea"],
+  ["Baş dönmesi", /baş\S* dön/u, "SYM.dizziness"],
+  ["Kilitlenme", /kilitlen/u, "SYM.locking"],
+  ["Morarma", /morar|morluk/u, "SYM.bruising"],
+  ["Öksürük", /öksür/u, "SYM.cough"],
+];
+
+const NUM: Record<string, number> = { bir: 1, iki: 2, üç: 3, dört: 4, beş: 5, altı: 6, yedi: 7, sekiz: 8, dokuz: 9, on: 10 };
+
+function durationOf(text: string): Extraction["duration"] {
+  if (/yarım saat|bir saat|birkaç saat|bu sabah|bugün/u.test(text)) return { label: "bugün", bucket: "hours" };
+  if (/dünden beri|dün/u.test(text)) return { label: "1 gün", bucket: "days1_3" };
+  const m = /(\d+|bir|iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|birkaç)\s*(saat|gün|hafta|ay|yıl)/u.exec(text);
+  if (!m) return null;
+  const n = m[1] === "birkaç" ? 3 : (NUM[m[1]] ?? parseInt(m[1], 10));
+  const days = m[2] === "saat" ? 0 : m[2] === "gün" ? n : m[2] === "hafta" ? n * 7 : m[2] === "ay" ? n * 30 : n * 365;
+  const bucket: DurationBucket = days === 0 ? "hours" : days <= 3 ? "days1_3" : days <= 7 ? "days4_7" : days <= 28 ? "weeks" : "months";
+  return { label: `${m[1] === "birkaç" ? "birkaç" : n} ${m[2]}`, bucket };
+}
+
+/** Adım 2: metni çözümler. Kırmızı bayrak kontrolü ayrıca analyzeSymptoms ile (ön kapı) yapılır. */
+export function extractComplaint(input: string): Extraction {
+  const text = norm(input);
+  const notes: string[] = [];
+  const regions: RegionHit[] = [];
+  const seen = new Set<RegionBase>();
+
+  for (const base of REGION_ORDER) {
+    const def = REGIONS[base];
+    const m = def.re.exec(text);
+    if (!m) continue;
+    // "ayak bileği" eşleştiyse "bilek" (el) ayrıca sayılmaz; üst karın eşleştiyse genel "karın" sayılmaz.
+    if (base === "wrist" && seen.has("ankle") && !/el bile|parmak|avuç/u.test(text)) continue;
+    if (base === "lower_abdomen" && seen.has("upper_abdomen") && !/alt karın|kasık|apandis/u.test(text)) continue;
+    if (NEGATION.test(text.slice(m.index + m[0].length))) {
+      notes.push(`“${m[0].trim()} … yok” olumsuz ifade olarak değerlendirildi; şikayet bölgesi sayılmadı.`);
+      continue;
+    }
+    const side = def.paired ? sideBefore(text, m.index) : null;
+    const hit = regionHit(base, side);
+    if (hit.sideAssumed) notes.push(`${def.name} için taraf belirtilmedi; sağ taraf varsayıldı. Gerekirse 3B modelde doğrulayın.`);
+    regions.push(hit);
+    seen.add(base);
+  }
+
+  const symptoms: SymptomHit[] = [];
+  for (const [name, re, code] of SYMPTOMS) {
+    const m = positiveMatch(text, re);
+    if (m) symptoms.push({ name, code, expr: m[0] });
+    else if (re.test(text)) notes.push(`“${name.toLocaleLowerCase("tr-TR")}” olumsuz bağlamda geçtiği için belirti sayılmadı.`);
+  }
+
+  return {
+    regions,
+    symptoms,
+    duration: durationOf(text),
+    onset: /aniden|birden|ani /u.test(text) ? "sudden" : /yavaş yavaş|giderek|zamanla/u.test(text) ? "gradual" : null,
+    course: /azal|hafifl|geçmeye başla|iyileş/u.test(text) ? "better" : /artan|artıyor|kötüleş|şiddetlen|giderek/u.test(text) ? "worse" : null,
+    fever: !!positiveMatch(text, /ateş/u),
+    notes,
+  };
+}
+
+/** Çıkarımdan takip sorularının ön doldurulmuş yanıtları (kullanıcı değiştirebilir). */
+export function prefillAnswers(x: Extraction): TriageAnswers {
+  return { ...EMPTY_ANSWERS, duration: x.duration?.bucket ?? null, onset: x.onset, course: x.course, fever: x.fever ? true : null };
+}
+
+/** Birincil bölgenin kırmızı bayrak sorusu (bölge yoksa genel bilinç sorusu). */
+export function redFlagQuestion(x: Extraction): RedFlagQuestion {
+  const base = x.regions[0]?.base;
+  return base
+    ? REGIONS[base].redFlag
+    : { q: "Bayılma, bilinç bulanıklığı ya da ani nefes darlığı oldu mu?", flag: "Bilinç değişikliği / nefes darlığı", reason: "Bayılma, bilinç bulanıklığı veya ani nefes darlığı acil değerlendirme gerektirir.", escalate: "critical" };
+}
+
+/** Takip sorularının tamamı yanıtlandı mı. */
+export const answersComplete = (a: TriageAnswers) =>
+  a.severity !== null && a.duration !== null && a.onset !== null && a.course !== null && a.fever !== null && a.redFlag !== null;
+
+const COURSE_LABEL: Record<Course, string> = { worse: "giderek artıyor", same: "değişmiyor", better: "azalıyor" };
+
+function summaryOf(x: Extraction, a: TriageAnswers) {
+  const where = x.regions.length ? `${x.regions.map((r) => r.name).join(", ")} bölgesinde` : "Belirli bir bölge belirtilmeden";
+  const dur = DURATIONS.find((d) => d.id === a.duration)?.label.toLocaleLowerCase("tr-TR");
+  const since = a.duration === "hours" ? "bugün başlayan" : dur ? `${dur}dür süren` : "";
+  const sym = x.symptoms.length ? x.symptoms.map((s) => s.name.toLocaleLowerCase("tr-TR")).join(", ") : "şikayet";
+  return (
+    [
+      `${where} ${since} ${sym}`.replace(/\s+/g, " ").trim(),
+      `şiddet ${a.severity ?? "?"}/10`,
+      a.onset === "sudden" ? "ani başlangıç" : "kademeli başlangıç",
+      a.course ? `seyir: ${COURSE_LABEL[a.course]}` : null,
+      a.fever ? "ateş var" : "ateş yok",
+    ]
+      .filter(Boolean)
+      .join("; ") + "."
+  );
+}
+
+const GENERIC_FIRST_AID = [
+  "Ağrıyı artıran hareketlerden ve ağır yük kaldırmaktan kaçının.",
+  "Başvuruya kadar yeni bir ilaç denemeyin; kullandığınız ilaçların listesini hazırlayın.",
+  "Belirtilerinizin başlangıç saatini ve nasıl değiştiğini not edin.",
+];
+const GENERIC_PREP = [
+  "Şikayetin başlangıcını, süresini ve neyle arttığını not edin.",
+  "Kullandığınız ilaçların listesini ve varsa önceki tetkik sonuçlarınızı yanınıza alın.",
+  "Doktorunuza soracağınız soruları önceden yazın.",
+];
+
+/** Adım 4: kural tabanı + takip yanıtları → nihai triyaj. Seviye yalnızca yükselebilir, kural tabanının altına düşmez. */
+export function finalizeTriage(input: string, x: Extraction, a: TriageAnswers): TriageResult {
+  const base = analyzeSymptoms(input);
+  const primary = x.regions[0];
+  const extra = { regions: x.regions, symptoms: x.symptoms, answers: a, summary: summaryOf(x, a), baseLevel: base.triageLevel };
+  const mesh = base.meshIdToHighlight ?? primary?.structures[0]?.meshId ?? null;
+  const region = primary?.name ?? base.primaryRegion;
+
+  // Ön kapı: metinde kırmızı bayrak varsa seviye düşürülemez.
+  if (base.isRedFlag) return { ...base, ...extra, reasons: [`${base.ruleId} · ${base.redFlagReason}`] };
+
+  const rf = redFlagQuestion(x);
+  if (a.redFlag && rf.escalate === "critical") {
+    return {
+      ...base,
+      ...extra,
+      triageLevel: "critical",
+      primaryRegion: region,
+      meshIdToHighlight: mesh,
+      department: "Acil Servis (112)",
+      isRedFlag: true,
+      redFlagReason: rf.reason,
+      ruleId: `RF-Q-${primary?.base ?? "GEN"}`,
+      reasons: [`Takip sorusu: ${rf.flag}`],
+      clinicalNotes: `Takip sorusunda kırmızı bayrak yanıtı (${rf.flag}). Sonuç seviyesi düşürülemez.`,
+    };
+  }
+
+  let rank: number = TRIAGE_LEVELS[base.triageLevel].rank;
+  const reasons: string[] = [];
+  const raise = (to: number, why: string) => {
+    if (to < rank) {
+      rank = to;
+      reasons.unshift(why);
+    }
+  };
+  const sev = a.severity ?? 0;
+  const dur = a.duration ? DURATION_RANK[a.duration] : 0;
+
+  if (a.redFlag) raise(2, `Takip sorusu: ${rf.flag}`);
+  if (sev >= 8) raise(2, `Şiddetli ağrı (${sev}/10)`);
+  if (a.onset === "sudden" && sev >= 7) raise(2, "Ani başlayan şiddetli ağrı");
+  if (a.fever && (dur >= 2 || sev >= 7)) raise(2, "3 günü aşan ya da şiddetli ağrıyla birlikte ateş");
+  if (rank === 4) {
+    const why = sev >= 6 ? `ağrı şiddeti ${sev}/10` : dur >= 3 ? "şikayetin 1 haftadan uzun sürmesi" : a.course === "worse" ? "giderek artan seyir" : a.fever ? "ateş eşlik etmesi" : null;
+    if (why) raise(3, `Evde izlem için uygun değil: ${why}`);
+  }
+  reasons.push(`Kural tabanı: ${base.ruleId} (${TRIAGE_LEVELS[base.triageLevel].code} · ${TRIAGE_LEVELS[base.triageLevel].label})`);
+
+  const level = LEVEL_BY_RANK[rank as 1 | 2 | 3 | 4];
+  const dept = base.department.replace(/^Gerekirse:\s*/u, "");
+  return {
+    ...base,
+    ...extra,
+    triageLevel: level,
+    primaryRegion: region,
+    meshIdToHighlight: mesh,
+    department: level === "urgent" && !/acil/iu.test(dept) ? `Acil Servis veya Aile Hekimi · ardından ${dept}` : dept,
+    firstAid: level === "urgent" ? (base.firstAid ?? GENERIC_FIRST_AID) : base.firstAid,
+    visitPrep: level === "routine" ? (base.visitPrep ?? GENERIC_PREP) : base.visitPrep,
+    reasons,
+  };
+}
+
+/** Sonuç sayfasında "Doktorunuza sorabilecekleriniz" listesi. */
+export function doctorQuestions(level: TriageLevel) {
+  return level === "self_care"
+    ? ["Şikayetim hangi durumda muayene gerektirir?", "Evde uygulayabileceğim başka öneriler var mı?", "İşime ya da sporuma ne zaman dönebilirim?"]
+    : [
+        "Şikayetimin olası nedenleri neler; hangi tetkikler gerekli?",
+        "Şimdilik hangi hareketlerden veya yiyeceklerden kaçınmalıyım?",
+        "Ağrı kesici kullanabilir miyim, ne sıklıkla?",
+        "Hangi belirtilerde tekrar başvurmalıyım?",
+      ];
+}

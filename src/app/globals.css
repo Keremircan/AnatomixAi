@@ -239,6 +239,23 @@ dialog::backdrop {
   animation: beam 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
+/* Triyaj sonucu: 2B haritada şikayet bölgesinin nabız halkası */
+@keyframes pain-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+@utility animate-pain-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pain-ring 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
 @keyframes phase-progress {
   from {
     transform: scaleX(0);
@@ -253,7 +270,8 @@ dialog::backdrop {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
-  .animate-mark-scan {
+  .animate-mark-scan,
+  .animate-pain-ring {
     animation: none;
   }
   .animate-beam {
