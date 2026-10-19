@@ -127,8 +127,11 @@ function applyOpacity(originals: Originals, opacity: number, layer: AnatomyLayer
   const skin = layer === "skin";
   // Saydam deri: derinlik ön geçişi + stencil ile tek katman (bkz. ensureDepthPrepass)
   const prepass = skin && translucent;
-  const factor = -depth * 0.5;
-  const units = -depth * 2;
+  // Hiyerarşi yalnızca sabit ofsetle (units) kurulur. Eğime bağlı ofset (factor) kullanılmaz: saç tutamı, kulak
+  // kepçesi, çene hattı gibi ince ve sıyırma açılı yüzeylerde aynı parçanın ön ve arka yüzlerini farklı miktarda
+  // öne çekip arka yüzleri öne geçiriyor, kenarlarda koyu/açık tırtıklı çizgiler oluşturuyordu.
+  const factor = 0;
+  const units = -depth * 4;
   for (const mat of new Set(originals.values())) {
     (mat.userData as { baseSide?: number }).baseSide ??= mat.side;
     const baseSide = (mat.userData as { baseSide: number }).baseSide;
