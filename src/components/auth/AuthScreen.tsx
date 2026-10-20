@@ -4,7 +4,6 @@ import { useCallback, useEffect, useId, useLayoutEffect, useState } from "react"
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building, Check, Eye, EyeOff, LoaderCircle, Lock, Mail, ShieldCheck, Stethoscope, User, UserRound, type LucideIcon } from "lucide-react";
 import { HologramStage } from "./HologramStage";
-import { BrandLogo } from "@/components/brand/BrandLogo";
 import { AuthError, PROFESSIONS, signIn, signUp, SPECIALTIES, type Profession, type UserRole } from "@/lib/auth";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { cn } from "@/lib/utils";
@@ -207,8 +206,7 @@ export function AuthScreen() {
       {/* Sağ: form. Kısa ekranda yalnızca bu kolon kendi içinde kayar; sayfa kaymaz. */}
       <section className="relative flex min-h-0 flex-col overflow-y-auto px-4 py-6 sm:px-8 lg:px-10" aria-labelledby={`${uid}-title`}>
         <div className="m-auto w-full max-w-[440px] py-2 short:py-0">
-          <div className="mb-7 flex flex-col gap-4 short:mb-4 short:gap-3">
-            <BrandLogo size="lg" scanning />
+          <div className="mb-7 short:mb-4">
             <div>
               <h2 id={`${uid}-title`} className="text-2xl font-semibold tracking-tight">
                 {register ? "Hesabınızı oluşturun" : "Tekrar hoş geldiniz"}

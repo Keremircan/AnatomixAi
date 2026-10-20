@@ -57,11 +57,11 @@ export function BrandMark({ className, scanning = false }: { className?: string;
 }
 
 const SIZES = {
-  sm: { box: "size-9 rounded-[11px]", mark: "size-[26px]", text: "text-[15px]" },
+  sm: { box: "size-9 rounded-[11px]", mark: "size-[26px]", text: "text-base sm:text-[17px]" },
   lg: { box: "size-12 rounded-2xl", mark: "size-9", text: "text-xl" },
 } as const;
 
-/** Simge + ANATOMIX.AI yazısı. `beta` rozetini ve yazının dar ekranda gizlenmesini çağıran belirler. */
+/** Simge + ANATOMIX.AI yazısı. Yazı her genişlikte görünür; BETA rozeti dar ekranda gizlenir. */
 export function BrandLogo({
   size = "sm",
   beta = false,
@@ -89,7 +89,7 @@ export function BrandLogo({
           ANATOMIX<span className="text-accent">.AI</span>
         </span>
         {beta && (
-          <span className="rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[10px] tracking-wider text-muted">BETA</span>
+          <span className="hidden rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[10px] tracking-wider text-muted sm:inline">BETA</span>
         )}
       </span>
     </span>
