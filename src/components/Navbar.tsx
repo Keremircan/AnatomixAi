@@ -7,7 +7,7 @@ import { useSignOut } from "@/hooks/useSignOut";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
 import { BrandLogo } from "@/components/brand/BrandLogo";
-import { Clock, LoaderCircle, LogIn, LogOut, Scale, Stethoscope, UserRound, X } from "lucide-react";
+import { ChevronRight, Clock, LoaderCircle, LogIn, LogOut, Scale, Stethoscope, UserRound, X } from "lucide-react";
 import { displayName, PROFESSIONS, type UserProfile } from "@/lib/auth";
 import { useAnatomyStore, type UserRole } from "@/store/useAnatomyStore";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ export function Navbar() {
 
   return (
     <header className="glass sticky top-0 z-40 h-16 border-x-0 border-t-0 print:hidden">
-      <div className="mx-auto flex h-full max-w-[1440px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
+      <div className="mx-auto flex h-full max-w-[1440px] items-center gap-1.5 px-3 min-[400px]:gap-2 min-[400px]:px-4 sm:gap-3 sm:px-6">
         <Link href="/" aria-label="ANATOMIX.AI ana sayfa" className="rounded-xl">
           <BrandLogo beta />
         </Link>
@@ -100,19 +100,23 @@ function RoleBadge({ role, pending, rejected, ghost, title }: { role: UserRole; 
   );
 }
 
-const menuCls = "flex shrink-0 items-center gap-2 border-l border-line pl-2 sm:gap-3 sm:pl-3";
+/** Profil kartı: belirgin kenarlık + üzerine gelince vurgulanan kenar, gölge ve kayan ok (tıklanabilirlik ipucu). */
+const profileCardCls = "flex min-w-0 items-center gap-2.5 rounded-xl border border-line bg-surface-2/40 p-1 pr-2";
+
+const menuCls = "flex shrink-0 items-center gap-1.5 border-l border-line pl-1.5 min-[400px]:gap-2 min-[400px]:pl-2 sm:gap-3 sm:pl-3";
 const signOutCls = "flex h-9 items-center gap-1.5 rounded-xl border border-line px-2.5 text-[13px]";
 
 /** Oturum bilgisi gelene kadar UserMenu ile aynı ölçülerde yer tutucu. */
 function UserMenuSkeleton() {
   return (
     <div className={menuCls} aria-hidden>
-      <span className="flex items-center gap-2.5 p-1 pr-2">
+      <span className={profileCardCls}>
         <span className="size-9 animate-pulse rounded-full bg-surface-2" />
         <span className="hidden w-44 gap-1.5 md:grid">
           <span className="h-3 w-28 animate-pulse rounded bg-surface-2" />
-          <span className="h-2.5 w-40 animate-pulse rounded bg-surface-2" />
+          <span className="h-2.5 w-24 animate-pulse rounded bg-surface-2" />
         </span>
+        <ChevronRight className="hidden size-4 text-muted/40 sm:block" aria-hidden />
       </span>
       <RoleBadge ghost role="patient" pending={false} rejected={false} />
       <RoleBadge ghost role="clinician" pending={false} rejected={false} />
@@ -142,15 +146,20 @@ function UserMenu({ user }: { user: UserProfile }) {
       <Link
         href="/profile"
         aria-current={onProfile ? "page" : undefined}
-        title="Profilim"
-        className={cn("flex min-w-0 items-center gap-2.5 rounded-xl p-1 pr-2 transition hover:bg-surface-2", onProfile && "bg-surface-2 ring-1 ring-accent/30")}
+        title={`Profili yönet · ${user.email}`}
+        className={cn(
+          "group cursor-pointer transition-all duration-200 hover:border-accent/50 hover:bg-surface-2 hover:shadow-md focus-visible:border-accent/60",
+          profileCardCls,
+          onProfile && "border-accent/40 bg-accent/8",
+        )}
       >
         <UserAvatar user={user} size={36} className="rounded-full" textClassName="text-xs" />
         <span className="hidden w-44 min-w-0 leading-tight md:block">
           <span className="block truncate text-[13px] font-medium">{displayName(user)}</span>
-          <span className="block truncate text-[11px] text-muted">{user.email}</span>
+          <span className="block truncate text-[11px] font-medium text-accent">{onProfile ? "Hesap detayları" : "Profili yönet"}</span>
         </span>
-        <span className="sr-only md:hidden">Profilim</span>
+        <span className="sr-only md:hidden">Profili yönet</span>
+        <ChevronRight className="hidden size-4 shrink-0 text-muted transition-transform sm:block duration-200 group-hover:translate-x-1 group-hover:text-accent" aria-hidden />
       </Link>
       <RoleBadge role={user.role} pending={pending} rejected={rejected} title={[badge.label, profession, user.specialty].filter(Boolean).join(" · ")} />
       <button

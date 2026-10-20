@@ -57,7 +57,7 @@ export function BrandMark({ className, scanning = false }: { className?: string;
 }
 
 const SIZES = {
-  sm: { box: "size-9 rounded-[11px]", mark: "size-[26px]", text: "text-base sm:text-[17px]" },
+  sm: { box: "size-9 rounded-[11px]", mark: "size-[26px]", text: "text-sm min-[400px]:text-[15px] sm:text-[17px]" },
   lg: { box: "size-12 rounded-2xl", mark: "size-9", text: "text-xl" },
 } as const;
 
@@ -75,7 +75,7 @@ export function BrandLogo({
 }) {
   const s = SIZES[size];
   return (
-    <span className="flex shrink-0 items-center gap-2.5">
+    <span className="flex shrink-0 items-center gap-2 min-[400px]:gap-2.5">
       <span
         className={cn(
           "relative grid shrink-0 place-items-center border border-accent/30 bg-[radial-gradient(circle_at_50%_35%,color-mix(in_oklab,var(--accent)_22%,transparent),color-mix(in_oklab,var(--accent)_6%,transparent)_70%)] shadow-[inset_0_0_12px_-4px_var(--accent)]",
