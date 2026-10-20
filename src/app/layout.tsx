@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Navbar } from "@/components/Navbar";
 import { AuthListener } from "@/components/AuthListener";
+import { HealthOnboardingModal } from "@/components/HealthOnboardingModal";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ROLE_HINT_KEY } from "@/lib/auth";
 import "./globals.css";
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <AuthListener />
           <Navbar />
           {children}
+          <HealthOnboardingModal />
         </ThemeProvider>
       </body>
     </html>

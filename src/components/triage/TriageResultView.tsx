@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Armchair, ArrowLeft, BookOpen, BriefcaseMedical, Check, CircleHelp, ClipboardList, Clock, Crosshair, Hospital, Lock, MapPin, Phone, Plus, Printer, Stethoscope,
+  Armchair, ArrowLeft, HeartPulse, BookOpen, BriefcaseMedical, Check, CircleHelp, ClipboardList, Clock, Crosshair, Hospital, Lock, MapPin, Phone, Plus, Printer, Stethoscope,
   Thermometer, TriangleAlert,
 } from "lucide-react";
 import { layerDef } from "@/lib/layers";
@@ -257,6 +257,27 @@ function Recommendation({ result }: { result: TriageResult }) {
             ))}
           </ul>
         </div>
+        {result.healthFactors.length > 0 && (
+          <p className="mt-3 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+            <HeartPulse className="size-3.5 text-accent" aria-hidden />
+            Sağlık profiliniz değerlendirmeye katıldı:
+            {result.healthFactors.map((f) => (
+              <span key={f} className="rounded-md bg-accent/10 px-1.5 py-0.5 font-medium text-accent">
+                {f}
+              </span>
+            ))}
+          </p>
+        )}
+        {result.healthNotes.length > 0 && (
+          <div className="mt-3 rounded-xl border border-caution/35 bg-caution/8 p-3">
+            <div className="text-xs font-medium text-caution">Başvuruda hekiminize mutlaka belirtin</div>
+            <ul className="mt-1.5 grid gap-1 text-[13px]">
+              {result.healthNotes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </section>
   );

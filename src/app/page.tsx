@@ -2,6 +2,7 @@ import { CanvasContainer } from "@/components/canvas/CanvasContainer";
 import { LayerControls, ViewModeToggle } from "@/components/LayerControls";
 import { SelectionBadge } from "@/components/SelectionBadge";
 import { TriageFlow } from "@/components/triage/TriageFlow";
+import { HealthReminder } from "@/components/HealthReminder";
 
 /**
  * Bölünmüş düzen: geniş ekranda solda 3B çalışma alanı, sağda kendi içinde kayan semptom/triyaj paneli;
@@ -35,6 +36,7 @@ export default function Home() {
       <aside aria-label="Şikayet ve triyaj" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 lg:overflow-y-auto lg:pr-1 lg:pb-2">
         <TriageFlow />
       </aside>
+      <HealthReminder />
     </main>
   );
 }

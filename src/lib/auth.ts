@@ -8,6 +8,8 @@
 export type UserRole = "patient" | "clinician";
 export type Profession = "physician" | "physiotherapist" | "nurse";
 /** localStorage anahtarı: yalnızca son oturumun rol türü (kişisel veri değil). F5'te Navbar iskeletinin genişliğini belirler. */
+import type { HealthData } from "@/lib/health";
+
 export const ROLE_HINT_KEY = "anatomix-role-hint";
 
 export type VerificationStatus = "not_required" | "pending" | "verified" | "rejected";
@@ -40,6 +42,8 @@ export interface ProfileDetails extends UserProfile {
   /** ISO tarih */
   createdAt: string;
   consents: ConsentRecord[];
+  /** Kişiselleştirilmiş sağlık profili (doldurulmadıysa null) */
+  health: HealthData | null;
 }
 
 export const PROFESSIONS: { id: Profession; label: string; title: string }[] = [
@@ -158,3 +162,30 @@ export async function removeAvatar() {
   if (!res?.ok) throw new AuthError("Fotoğraf kaldırılamadı. Lütfen tekrar deneyin.");
 }
 
+/* ───────────────────────── Sağlık profili ───────────────────────── */
+
+export type HealthResponse = { health: HealthData | null; remind: boolean };
+
+async function healthRequest(method: string, body?: unknown): Promise<HealthResponse> {
+  let res: Response;
+  try {
+    res = await fetch("/api/user/health-data", {
+      method,
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new AuthError("Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.");
+  }
+  if (!res.ok) throw new AuthError(method === "GET" ? "Sağlık profili yüklenemedi." : "Sağlık profili kaydedilemedi. Lütfen tekrar deneyin.", `HTTP ${res.status}`);
+  return (await res.json()) as HealthResponse;
+}
+
+export const fetchHealthData = () => healthRequest("GET");
+export const saveHealthData = (health: HealthData) => healthRequest("PUT", health);
+export const deleteHealthData = () => healthRequest("DELETE");
+export async function dismissHealthReminder() {
+  await healthRequest("PATCH", { action: "dismiss" }).catch(() => undefined);
+}

@@ -5,6 +5,7 @@
  * Böylece bir metin hem acil hem rutin kalıba uyuyorsa her zaman daha acil seviye kazanır.
  */
 
+import { healthRiskFactors, type HealthData } from "./health";
 import { REGION_ORDER, REGIONS, regionHit, type RedFlagQuestion, type RegionBase, type RegionHit } from "./bodyRegions";
 
 export type TriageLevel = "critical" | "urgent" | "routine" | "self_care";
@@ -458,6 +459,10 @@ export type TriageResult = AnalysisResult & {
   summary: string;
   /** Kural tabanının ilk önerdiği seviye (takip yanıtlarından önce) */
   baseLevel: TriageLevel;
+  /** Değerlendirmeye katılan sağlık profili bilgileri (ör. "68 yaş", "Diyabet"); profil yoksa boş */
+  healthFactors: string[];
+  /** Başvuruda hekime iletilmesi gerekenler (alerji, düzenli ilaç, tıbbi cihaz) */
+  healthNotes: string[];
 };
 
 const SYMPTOMS: [string, RegExp, string][] = [
@@ -582,10 +587,24 @@ const GENERIC_PREP = [
 ];
 
 /** Adım 4: kural tabanı + takip yanıtları → nihai triyaj. Seviye yalnızca yükselebilir, kural tabanının altına düşmez. */
-export function finalizeTriage(input: string, x: Extraction, a: TriageAnswers): TriageResult {
+export function finalizeTriage(input: string, x: Extraction, a: TriageAnswers, health?: HealthData | null): TriageResult {
   const base = analyzeSymptoms(input);
   const primary = x.regions[0];
-  const extra = { regions: x.regions, symptoms: x.symptoms, answers: a, summary: summaryOf(x, a), baseLevel: base.triageLevel };
+  const risk = healthRiskFactors(health);
+  const healthFactors = [
+    ...(risk.age !== null ? [`${risk.age} yaş`] : []),
+    ...(risk.diabetes ? ["Diyabet"] : []),
+    ...risk.chronic.filter((c) => !/diyabet|şeker/iu.test(c)),
+    ...(risk.anticoagulant ? ["Kan sulandırıcı kullanımı"] : []),
+  ];
+  const healthNotes = health
+    ? [
+        ...(health.allergies.length ? [`Alerjileriniz: ${health.allergies.join(", ")}`] : []),
+        ...(health.regularMedications.length ? [`Düzenli ilaçlarınız: ${health.regularMedications.join(", ")}`] : []),
+        ...(health.medicalDevices.length ? [`Tıbbi cihaz / implant: ${health.medicalDevices.join(", ")} (MR veya girişim öncesi mutlaka belirtin)`] : []),
+      ]
+    : [];
+  const extra = { regions: x.regions, symptoms: x.symptoms, answers: a, summary: summaryOf(x, a), baseLevel: base.triageLevel, healthFactors, healthNotes };
   const mesh = base.meshIdToHighlight ?? primary?.structures[0]?.meshId ?? null;
   const region = primary?.name ?? base.primaryRegion;
 
@@ -624,9 +643,15 @@ export function finalizeTriage(input: string, x: Extraction, a: TriageAnswers): 
   if (sev >= 8) raise(2, `Şiddetli ağrı (${sev}/10)`);
   if (a.onset === "sudden" && sev >= 7) raise(2, "Ani başlayan şiddetli ağrı");
   if (a.fever && (dur >= 2 || sev >= 7)) raise(2, "3 günü aşan ya da şiddetli ağrıyla birlikte ateş");
+  // Sağlık profili: yalnızca yükseltir. Kırılgan gruplarda ateş ve kan sulandırıcıyla baş şikayeti beklememeli.
+  if (a.fever && (risk.elderly || risk.diabetes)) raise(2, `Sağlık profili: ${risk.elderly ? "65 yaş üstü" : "diyabet"} ile birlikte ateş`);
+  if (risk.anticoagulant && primary?.base === "head") raise(2, "Sağlık profili: kan sulandırıcı kullanırken baş şikayeti (kanama riski)");
   if (rank === 4) {
     const why = sev >= 6 ? `ağrı şiddeti ${sev}/10` : dur >= 3 ? "şikayetin 1 haftadan uzun sürmesi" : a.course === "worse" ? "giderek artan seyir" : a.fever ? "ateş eşlik etmesi" : null;
     if (why) raise(3, `Evde izlem için uygun değil: ${why}`);
+  }
+  if (rank === 4 && (risk.elderly || risk.diabetes || risk.chronic.length)) {
+    raise(3, `Sağlık profili: ${[risk.elderly && "65 yaş üstü", risk.diabetes && "diyabet", ...risk.chronic.map((c) => c.toLocaleLowerCase("tr-TR"))].filter(Boolean).join(", ")} nedeniyle muayene önerilir`);
   }
   reasons.push(`Kural tabanı: ${base.ruleId} (${TRIAGE_LEVELS[base.triageLevel].code} · ${TRIAGE_LEVELS[base.triageLevel].label})`);
 

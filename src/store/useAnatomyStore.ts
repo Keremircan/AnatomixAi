@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { UserProfile, UserRole } from "@/lib/auth";
 import { LAYER_IDS, layerOfMesh, type AnatomyLayer } from "@/lib/layers";
 import type { RegionHit } from "@/lib/bodyRegions";
+import type { HealthData } from "@/lib/health";
 import {
   analyzeSymptoms, EMPTY_ANSWERS, extractComplaint, finalizeTriage, prefillAnswers,
   type AnalysisResult, type Extraction, type TriageAnswers, type TriageLevel, type TriageResult,
@@ -77,6 +78,18 @@ type AnatomyState = {
   hoveredMesh: MeshInfo | null;
   setHoveredMesh: (mesh: MeshInfo | null) => void;
 
+  /* ── Kişiselleştirilmiş sağlık profili (yalnızca bellekte; çıkışta silinir) ── */
+  /** undefined: henüz yüklenmedi · null: doldurulmamış */
+  health: HealthData | null | undefined;
+  /** Ana sayfadaki hatırlatma bandı gösterilsin mi (sunucu kararı + "Şimdi değil") */
+  healthReminder: boolean;
+  setHealth: (health: HealthData | null, remind?: boolean) => void;
+  hideHealthReminder: () => void;
+  /** Sihirbaz: null kapalı, sayı açık adım (0–2) */
+  healthWizardStep: number | null;
+  openHealthWizard: (step?: number) => void;
+  closeHealthWizard: () => void;
+
   /* ── Semptom ve triyaj (yalnızca bellekte; sayfa yenilenince veya çıkışta silinir) ── */
   symptomText: string;
   setSymptomText: (text: string) => void;
@@ -128,8 +141,16 @@ export const useAnatomyStore = create<AnatomyState>()((set, get) => ({
   login: (user) => set({ user, isAuthenticated: true, authReady: true, role: user.role }),
   logout: () => {
     get().resetAnalysis();
-    set({ user: null, isAuthenticated: false, authReady: true, role: "patient" });
+    set({ user: null, isAuthenticated: false, authReady: true, role: "patient", health: undefined, healthReminder: false, healthWizardStep: null });
   },
+
+  health: undefined,
+  healthReminder: false,
+  setHealth: (health, remind) => set((s) => ({ health, healthReminder: remind ?? s.healthReminder })),
+  hideHealthReminder: () => set({ healthReminder: false }),
+  healthWizardStep: null,
+  openHealthWizard: (step = 0) => set({ healthWizardStep: step }),
+  closeHealthWizard: () => set({ healthWizardStep: null }),
 
   // Sahne boş açılır; kullanıcı sol panelden katman seçene kadar hiçbir model indirilmez.
   activeLayers: [],
@@ -189,7 +210,7 @@ export const useAnatomyStore = create<AnatomyState>()((set, get) => ({
     const answers = prefillAnswers(extraction);
     // Ön kapı: metinde kırmızı bayrak varsa takip soruları sorulmaz, sonuç doğrudan T1'dir.
     if (analyzeSymptoms(text).isRedFlag) {
-      const result = finalizeTriage(text, extraction, answers);
+      const result = finalizeTriage(text, extraction, answers, get().health);
       set({ extraction, answers, analysisResult: result, triageStep: "done" });
       selectResultMesh(result);
       return;
@@ -221,7 +242,7 @@ export const useAnatomyStore = create<AnatomyState>()((set, get) => ({
   finishTriage: () => {
     const { extraction, answers, symptomText } = get();
     if (!extraction) return;
-    const result = finalizeTriage(symptomText.trim(), extraction, answers);
+    const result = finalizeTriage(symptomText.trim(), extraction, answers, get().health);
     set({ analysisResult: result, triageStep: "done" });
     selectResultMesh(result);
   },

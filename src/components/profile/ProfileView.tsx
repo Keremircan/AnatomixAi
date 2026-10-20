@@ -11,6 +11,7 @@ import { AuthError, DISCLAIMER_VERSION, fetchProfileDetails, KVKK_VERSION, PROFE
 import { getCachedProfile, setCachedProfile } from "@/lib/profileCache";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { AvatarEditor } from "./AvatarEditor";
+import { HealthCards } from "./HealthCards";
 import { useSignOut } from "@/hooks/useSignOut";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +85,8 @@ export function ProfileView() {
   const { signOut, leaving } = useSignOut();
   const user = useAnatomyStore((s) => s.user);
   const login = useAnatomyStore((s) => s.login);
+  const storeHealth = useAnatomyStore((s) => s.health);
+  const setHealth = useAnatomyStore((s) => s.setHealth);
   const [fresh, setFresh] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +114,8 @@ export function ProfileView() {
         }
         setCachedProfile(profile);
         setFresh(profile);
+        // Sağlık profili store'a da yazılır: sihirbaz ve triyaj aynı veriyi kullanır.
+        setHealth(profile.health);
         setError(null);
       })
       .catch((e: unknown) => {
@@ -122,7 +127,7 @@ export function ProfileView() {
     return () => {
       cancelled = true;
     };
-  }, [router, reloadKey]);
+  }, [router, reloadKey, setHealth]);
 
   const details = fresh ?? getCachedProfile(user?.id);
   const base: UserProfile | null = details ?? user;
@@ -175,7 +180,16 @@ export function ProfileView() {
         )}
 
         {base ? (
-          <ProfileContent base={base} details={details} failed={!!error && !details} onAvatarChange={onAvatarChange} onSignOut={signOut} leaving={leaving} />
+          <ProfileContent
+            base={base}
+            details={details}
+            failed={!!error && !details}
+            // Sihirbazda kaydedilen güncel veri önceliklidir; yoksa profil sorgusundaki veri.
+            health={storeHealth !== undefined ? storeHealth : details?.health}
+            onAvatarChange={onAvatarChange}
+            onSignOut={signOut}
+            leaving={leaving}
+          />
         ) : (
           !error && <Skeleton />
         )}
@@ -188,6 +202,7 @@ function ProfileContent({
   base: p,
   details,
   failed,
+  health,
   onAvatarChange,
   onSignOut,
   leaving,
@@ -196,6 +211,7 @@ function ProfileContent({
   details: ProfileDetails | null;
   /** Ayrıntılar yüklenemedi (iskelet yerine açıklama gösterilir) */
   failed: boolean;
+  health: ProfileDetails["health"] | undefined;
   onAvatarChange: (avatarUrl: string | null) => void;
   onSignOut: () => void;
   leaving: boolean;
@@ -270,6 +286,8 @@ function ProfileContent({
           </p>
         )}
       </section>
+
+      <HealthCards health={health} loading={health === undefined && !failed} />
 
       <div className={cn("grid grid-cols-[minmax(0,1fr)] gap-4", clinician && "md:grid-cols-2")}>
         {clinician && (

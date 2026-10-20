@@ -1,5 +1,6 @@
 import "server-only";
 import { db, withReadRetry } from "./db";
+import { HEALTH_COLUMNS, toHealthData } from "./health";
 import type { ConsentRecord, ProfileDetails, Profession, UserProfile, UserRole, VerificationStatus } from "@/lib/auth";
 
 type UserRow = {
@@ -84,13 +85,13 @@ export async function createUser(input: NewUser) {
 }
 
 /**
- * Profil sayfası için kullanıcı ayrıntıları ve her onay türünün en güncel kaydı — tek sorguda.
+ * Profil sayfası için kullanıcı ayrıntıları, her onay türünün en güncel kaydı ve sağlık profili — tek sorguda.
  * Veritabanı uzak bir bölgede olduğundan (her gidiş-dönüş yüzlerce ms) iki ayrı sorgu yerine
  * onaylar alt sorguyla JSON olarak aynı satırda döner. Her iki erişim de indeksli (users.id, consents.user_id).
  * Kullanıcı yoksa veya pasifse null.
  */
 export async function getProfileDetails(id: string): Promise<ProfileDetails | null> {
-  const [u] = await withReadRetry(() => db()<(Omit<UserRow, "password_hash"> & { created_at: Date; consents: ConsentRecord[] })[]>`
+  const [u] = await withReadRetry(() => db()<(Omit<UserRow, "password_hash"> & { created_at: Date; consents: ConsentRecord[]; health: Parameters<typeof toHealthData>[0] | null })[]>`
     select
       u.id, u.email, u.full_name, u.role, u.profession, u.specialty, u.institution,
       u.verification_status, u.is_active, u.avatar_url, u.created_at,
@@ -102,7 +103,8 @@ export async function getProfileDetails(id: string): Promise<ProfileDetails | nu
           where user_id = u.id
           order by kind, accepted_at desc
         ) c
-      ), '[]'::json) as consents
+      ), '[]'::json) as consents,
+      (select row_to_json(h) from (select ${db().unsafe(HEALTH_COLUMNS)} from app.patient_health_data where user_id = u.id) h) as health
     from app.users u
     where u.id = ${id} and u.is_active
   `);
@@ -113,6 +115,7 @@ export async function getProfileDetails(id: string): Promise<ProfileDetails | nu
     isActive: u.is_active,
     createdAt: u.created_at.toISOString(),
     consents: u.consents.map((c) => ({ ...c, acceptedAt: new Date(c.acceptedAt).toISOString() })),
+    health: u.health ? toHealthData(u.health) : null,
   };
 }
 
