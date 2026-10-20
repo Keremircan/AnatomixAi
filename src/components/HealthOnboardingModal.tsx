@@ -49,7 +49,7 @@ function ChipGroup<T extends string>({
               // Seçili seçeneğe yeniden tıklamak seçimi kaldırır.
               onClick={() => onChange(on ? null : o)}
               className={cn(
-                "min-h-9 rounded-lg border px-2 py-1.5 text-[13px] transition",
+                "min-h-9 min-w-0 rounded-lg border px-1.5 py-1.5 text-[13px] leading-tight [overflow-wrap:anywhere] transition",
                 on ? "border-accent/60 bg-accent/12 font-medium text-accent" : "border-line hover:bg-surface-2/70",
               )}
             >

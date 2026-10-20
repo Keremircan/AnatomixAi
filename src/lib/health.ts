@@ -14,7 +14,7 @@ export type BloodSugarStatus = (typeof BLOOD_SUGAR)[number];
 
 export const HABITS = ["none", "occasional", "regular"] as const;
 export type Habit = (typeof HABITS)[number];
-export const HABIT_LABEL: Record<Habit, string> = { none: "Kullanmıyorum", occasional: "Ara sıra", regular: "Düzenli" };
+export const HABIT_LABEL: Record<Habit, string> = { none: "Hiç", occasional: "Ara sıra", regular: "Düzenli" };
 
 export type Lifestyle = { smoking: Habit | null; alcohol: Habit | null };
 
