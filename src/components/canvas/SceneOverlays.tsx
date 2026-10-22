@@ -7,6 +7,11 @@ import { cn } from "@/lib/utils";
 
 /** Geniş ekranda sol katman paneli 3B alanın solunu kapladığı için kaplamalar panelin sağından başlar. */
 const PANEL_OFFSET = "md:left-[calc(18rem+1.5rem)]";
+/**
+ * Sağ üstteki görünüm modu düğmeleriyle (Üst üste / Yan yana) çakışmasın diye: alan dar olduğunda rehber
+ * düğmelerin altına iner. Geniş ekranda sol panel ofseti hesaba katılarak (md) daha geniş eşik kullanılır.
+ */
+const GUIDE_TOP = "top-16 @min-[30rem]:top-3 md:top-16 md:@min-[48rem]:top-3";
 
 const subscribeCoarse = (cb: () => void) => {
   const mq = window.matchMedia("(pointer: coarse)");
@@ -97,7 +102,7 @@ export function ControlsGuide() {
   }, [open]);
 
   return (
-    <div className={cn("pointer-events-none absolute top-3 left-3", PANEL_OFFSET)}>
+    <div className={cn("pointer-events-none absolute left-3", GUIDE_TOP, PANEL_OFFSET)}>
       {open ? (
         <section aria-label="3B kontrol rehberi" className="glass pointer-events-auto w-52 rounded-xl p-3 shadow-elev animate-rise">
           <div className="flex items-center justify-between">
@@ -105,10 +110,11 @@ export function ControlsGuide() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Kontrol rehberini gizle"
-              className="-m-1 rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-foreground"
+              aria-label="Kontrol rehberini kapat"
+              title="Kapat"
+              className="-my-1 -mr-1.5 grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-foreground"
             >
-              <X className="size-3.5" aria-hidden />
+              <X className="size-4" aria-hidden />
             </button>
           </div>
           <ul className="mt-2 grid gap-1.5">
