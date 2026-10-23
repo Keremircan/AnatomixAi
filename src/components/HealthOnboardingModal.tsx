@@ -9,14 +9,13 @@ import {
 } from "@/lib/health";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { cn } from "@/lib/utils";
+import { BirthDatePicker } from "@/components/ui/BirthDatePicker";
 
 const STEPS = [
   { title: "Biyometri ve temel bilgiler", hint: "Yaş, boy ve kilo; ağrı ve risk değerlendirmesinde kullanılır." },
   { title: "Vital ve kronik göstergeler", hint: "Tansiyon, şeker, alerji ve süregelen hastalıklar triyaj seviyesini etkileyebilir." },
   { title: "Geçmiş ve alışkanlıklar", hint: "Ameliyat, implant ve alışkanlıklar başvuru önerilerini kişiselleştirir." },
 ] as const;
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 /* ───────────────────────── Form parçaları ───────────────────────── */
 
@@ -133,7 +132,7 @@ function StepBiometrics({ data, set, uid }: StepProps) {
   return (
     <div className="grid gap-5">
       <ChipGroup label="Kan grubu" options={BLOOD_TYPES} value={data.bloodType} onChange={(v) => set("bloodType", v)} cols="grid-cols-4" />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor={`${uid}-h`}>Boy (cm)</Label>
           <input id={`${uid}-h`} type="number" inputMode="numeric" min={40} max={250} value={data.heightCm ?? ""} placeholder="175"
@@ -144,10 +143,10 @@ function StepBiometrics({ data, set, uid }: StepProps) {
           <input id={`${uid}-w`} type="number" inputMode="decimal" min={2} max={400} step={0.1} value={data.weightKg ?? ""} placeholder="72"
             onChange={(e) => set("weightKg", e.target.value === "" ? null : Number(e.target.value))} className={inputCls} />
         </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${uid}-b`}>Doğum tarihi</Label>
-          <input id={`${uid}-b`} type="date" min="1900-01-01" max={todayISO()} value={data.birthDate ?? ""} onChange={(e) => set("birthDate", e.target.value || null)} className={inputCls} />
-        </div>
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor={`${uid}-b`}>Doğum tarihi</Label>
+        <BirthDatePicker id={`${uid}-b`} value={data.birthDate} onChange={(v) => set("birthDate", v)} />
       </div>
       {bmi && (
         <p className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/50 px-3 py-2 text-sm">
