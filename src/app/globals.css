@@ -103,6 +103,27 @@ body {
   background: var(--background);
   color: var(--foreground);
   -webkit-tap-highlight-color: transparent;
+  /* Güvenlik ağı: bir öğe taşsa bile sayfa yatayda kaymaz (clip, yapışkan üst çubuğu bozmaz). */
+  overflow-x: clip;
+}
+
+/* iOS: yazı boyutunu kendiliğinden büyütmesin (yatay çevirmede) */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * iOS Safari, 16 px'ten küçük yazılı bir alana dokunulunca sayfayı ~%14 yakınlaştırır ve geri uzaklaştırmaz:
+ * sağ kenar ekrandan taşar, üst çubuk durum çubuğunun altına kayar. Dokunmatik ekranlarda form alanları en az
+ * 16 px yazılır (görsel boyut neredeyse aynı; kullanıcı yakınlaştırması kapatılmaz).
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
 }
 
 /* Telefon: alt sekme çubuğu (MobileTabBar) içeriği örtmesin */

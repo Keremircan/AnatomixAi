@@ -23,8 +23,9 @@ export const metadata: Metadata = {
   title: "ANATOMIX.AI",
   description: "3B anatomi üzerinde klinik ön triyaj ve poliklinik yönlendirme platformu.",
   applicationName: "ANATOMIX.AI",
-  // iOS: ana ekrana eklenince tam ekran uygulama gibi açılır; durum çubuğu içeriğin üstünde saydam durur.
-  appleWebApp: { capable: true, title: "ANATOMIX", statusBarStyle: "black-translucent" },
+  // iOS: ana ekrana eklenince tam ekran uygulama gibi açılır. Durum çubuğu siyah ve içeriğin üstünde ayrı durur
+  // (saydam "black-translucent" seçeneğinde saat ve simgeler üst çubuğun üzerine biniyordu).
+  appleWebApp: { capable: true, title: "ANATOMIX", statusBarStyle: "black" },
   formatDetection: { telephone: false },
 };
 
