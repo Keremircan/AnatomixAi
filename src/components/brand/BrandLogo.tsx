@@ -10,8 +10,17 @@ const MARK = { src: "/brand/anatomix-mark.png", width: 365, height: 512 };
  */
 export function BrandMark({ className, priority = false }: { className?: string; priority?: boolean }) {
   return (
-    <span className={cn("relative grid shrink-0 place-items-center overflow-hidden bg-white ring-1 ring-black/5 dark:ring-white/10", className)}>
-      <Image src={MARK.src} width={MARK.width} height={MARK.height} alt="" aria-hidden priority={priority} className="h-[82%] w-auto" />
+    <span className={cn("relative block shrink-0 overflow-hidden bg-white ring-1 ring-black/5 dark:ring-white/10", className)}>
+      {/* Logonun tamamı (ayaklar dahil) kutuya sığar: kutunun %10 kenar payı içinde oranı korunarak küçültülür. */}
+      <Image
+        src={MARK.src}
+        width={MARK.width}
+        height={MARK.height}
+        alt=""
+        aria-hidden
+        priority={priority}
+        className="absolute inset-[10%] size-[80%] object-contain"
+      />
     </span>
   );
 }
