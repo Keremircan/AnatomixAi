@@ -102,6 +102,22 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Telefon: alt sekme çubuğu (MobileTabBar) içeriği örtmesin */
+@media (width < 48rem) {
+  body:has(.mobile-tabbar) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Ana ekrandan açılan (yüklü) uygulama: sayfa kenarında lastik gibi esneme ve yenileme hareketi kapalı */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Tema değişiminde renkler yumuşak geçsin (3B tuval ve hareket azaltma tercihi hariç). */
@@ -197,25 +213,6 @@ dialog::backdrop {
   }
 }
 
-/* Logo simgesindeki tarama ışını (giriş ekranı başlığı) */
-@keyframes mark-scan {
-  0%,
-  100% {
-    transform: translateY(-11px);
-    opacity: 0;
-  }
-  15%,
-  85% {
-    opacity: 1;
-  }
-  50% {
-    transform: translateY(11px);
-  }
-}
-@utility animate-mark-scan {
-  animation: mark-scan 3.6s ease-in-out infinite;
-}
-
 /* Giriş ekranı hologramı: yukarıdan aşağı süzülen, kenarları dağılmış biyometrik tarama ışığı.
    3B sahne ışığın ekrandaki konumunu her karede okuyup aynı yüksekliği modelin üzerinde parlatır. */
 @keyframes beam {
@@ -288,7 +285,6 @@ dialog::backdrop {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
-  .animate-mark-scan,
   .animate-pain-ring {
     animation: none;
   }

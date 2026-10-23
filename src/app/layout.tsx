@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Navbar } from "@/components/Navbar";
 import { AuthListener } from "@/components/AuthListener";
 import { HealthOnboardingModal } from "@/components/HealthOnboardingModal";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { MobileTabBar } from "@/components/pwa/MobileTabBar";
 import { ROLE_HINT_KEY } from "@/lib/auth";
 import "./globals.css";
 
@@ -20,6 +22,21 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ANATOMIX.AI",
   description: "3B anatomi üzerinde klinik ön triyaj ve poliklinik yönlendirme platformu.",
+  applicationName: "ANATOMIX.AI",
+  // iOS: ana ekrana eklenince tam ekran uygulama gibi açılır; durum çubuğu içeriğin üstünde saydam durur.
+  appleWebApp: { capable: true, title: "ANATOMIX", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Çentikli ekranlarda içerik kenara kadar uzanır; boşluklar env(safe-area-inset-*) ile verilir.
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#060b12" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f6f9" },
+  ],
 };
 
 /** Boyamadan önce son oturumun rol ipucunu <html data-anx-role> olarak yazar (Navbar iskeleti doğru genişlikte çizilir). */
@@ -36,6 +53,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Navbar />
           {children}
           <HealthOnboardingModal />
+          <MobileTabBar />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

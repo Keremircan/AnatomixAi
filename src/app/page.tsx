@@ -33,7 +33,7 @@ export default function Home() {
         </div>
       </section>
 
-      <aside aria-label="Şikayet ve triyaj" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 lg:overflow-y-auto lg:pr-1 lg:pb-2">
+      <aside id="sikayet" aria-label="Şikayet ve triyaj" className="scroll-mt-[calc(4.5rem+env(safe-area-inset-top))] grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3 lg:overflow-y-auto lg:pr-1 lg:pb-2">
         <TriageFlow />
       </aside>
       <HealthReminder />

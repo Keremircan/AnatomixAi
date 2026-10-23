@@ -42,7 +42,7 @@ export function HealthReminder() {
   return (
     <aside
       aria-label="Sağlık profili hatırlatması"
-      className="glass fixed right-3 bottom-3 z-30 w-[min(calc(100vw-1.5rem),24rem)] rounded-card p-4 shadow-elev animate-rise sm:right-5 sm:bottom-5"
+      className="glass fixed right-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-1.5rem),24rem)] rounded-card p-4 shadow-elev animate-rise sm:right-5 md:bottom-5"
     >
       <div className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/12 text-accent">

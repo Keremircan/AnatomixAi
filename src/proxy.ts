@@ -44,5 +44,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Statik dosyalar (3B modeller, Draco çözücü, görseller) proxy'den geçmez.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|models/|draco/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|glb|gltf|wasm|json|txt)$).*)"],
+  // PWA dosyaları (manifest, service worker, çevrimdışı sayfası) da hariçtir: tarayıcı bunları çerezsiz ister.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|models/|draco/|manifest.webmanifest|sw.js|offline.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|glb|gltf|wasm|json|txt)$).*)"],
 };

@@ -12,6 +12,7 @@ import { getCachedProfile, setCachedProfile } from "@/lib/profileCache";
 import { useAnatomyStore } from "@/store/useAnatomyStore";
 import { AvatarEditor } from "./AvatarEditor";
 import { HealthCards } from "./HealthCards";
+import { InstallAppCard } from "@/components/pwa/InstallAppCard";
 import { useSignOut } from "@/hooks/useSignOut";
 import { cn } from "@/lib/utils";
 
@@ -288,6 +289,8 @@ function ProfileContent({
       </section>
 
       <HealthCards health={health} loading={health === undefined && !failed} />
+
+      <InstallAppCard />
 
       <div className={cn("grid grid-cols-[minmax(0,1fr)] gap-4", clinician && "md:grid-cols-2")}>
         {clinician && (

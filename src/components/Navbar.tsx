@@ -21,7 +21,7 @@ export function Navbar() {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   return (
-    <header className="glass sticky top-0 z-40 h-16 border-x-0 border-t-0 print:hidden">
+    <header className="glass sticky top-0 z-40 h-[calc(4rem+env(safe-area-inset-top))] border-x-0 border-t-0 pt-[env(safe-area-inset-top)] print:hidden">
       <div className="mx-auto flex h-full max-w-[1440px] items-center gap-1.5 px-3 min-[400px]:gap-2 min-[400px]:px-4 sm:gap-3 sm:px-6">
         <Link href="/" aria-label="ANATOMIX.AI ana sayfa" className="rounded-xl">
           <BrandLogo beta />
