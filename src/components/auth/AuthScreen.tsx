@@ -283,7 +283,7 @@ export function AuthScreen() {
                     autoComplete="name"
                     required
                     className={inputCls}
-                    placeholder="Ayşe Yılmaz"
+                    placeholder="Ad Soyad"
                   />
                 </Field>
               )}
